@@ -550,6 +550,9 @@
         regen();
       }
       renderAll();
+
+      // hook for scenario wizards ("Open in builder")
+      TB.ui.stlBuilder._loadExternal = loadModel;
     }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

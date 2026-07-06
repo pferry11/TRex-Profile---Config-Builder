@@ -5,20 +5,6 @@
   var TB = root.TB = root.TB || {};
   TB.ui = TB.ui || {};
 
-  var AVL_PCAPS = [
-    '../avl/delay_10_http_browsing_0.pcap',
-    '../avl/delay_10_http_get_0.pcap',
-    '../avl/delay_10_http_post_0.pcap',
-    '../avl/delay_10_https_0.pcap',
-    '../avl/delay_10_exchange_0.pcap',
-    '../avl/delay_10_oracle_0.pcap',
-    '../avl/delay_10_citrix_0.pcap',
-    '../avl/delay_10_smtp_0.pcap',
-    '../avl/delay_10_mail_pop_0.pcap',
-    '../avl/delay_10_sip_0.pcap',
-    '../avl/delay_dns_0.pcap'
-  ];
-
   var OPS = [
     { op: 'send', label: 'send (TCP)' },
     { op: 'recv', label: 'recv (TCP)' },
@@ -106,12 +92,7 @@
       var selectedIdx = 0; // index into capList or templates depending on mode
       var regenTimer = null;
 
-      /* pcap-name datalist (shared, appended once) */
-      if (!document.getElementById('avl-pcaps')) {
-        var dl = el('datalist', { id: 'avl-pcaps' });
-        AVL_PCAPS.forEach(function (p) { dl.appendChild(el('option', { value: p })); });
-        document.body.appendChild(dl);
-      }
+      TB.ui.ensurePcapDatalist();
 
       var topbar = el('div', { class: 'builder-topbar' });
       var listPane = el('div', { class: 'pane pane-list' });
@@ -524,6 +505,9 @@
         regen();
       }
       renderAll();
+
+      // hook for scenario wizards ("Open in builder")
+      TB.ui.astfBuilder._loadExternal = loadModel;
     }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

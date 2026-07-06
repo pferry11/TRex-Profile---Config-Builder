@@ -6,7 +6,7 @@
   var TABS = [
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },
     { id: 'astf', label: 'ASTF Profile', mount: function (c) { TB.ui.astfBuilder.mount(c); } },
-    { id: 'scenarios', label: 'Scenarios', mount: null },
+    { id: 'scenarios', label: 'Scenarios', mount: function (c) { TB.ui.scenarios.mount(c); } },
     { id: 'settings', label: 'Settings', mount: null }
   ];
 
@@ -100,6 +100,9 @@
       pane.style.display = 'none';
       content.appendChild(pane);
     });
+
+    // expose for scenario wizards ("Open in builder")
+    TB.app = { activateTab: activate };
 
     var startTab = uiState.activeTab;
     var valid = TABS.some(function (t) { return t.id === startTab; });

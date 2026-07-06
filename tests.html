@@ -27,6 +27,7 @@
 <script src="js/gen/py.js"></script>
 <script src="js/gen/stl.js"></script>
 <script src="js/gen/astf.js"></script>
+<script src="js/gen/scenarios.js"></script>
 
 <script>
 'use strict';
@@ -573,6 +574,82 @@ test('ASTF warning: recv bytes mismatch vs peer sends', function () {
   var w = agen(m, NOW).warnings;
   var ok = w.some(function (x) { return x.indexOf('recv(555) does not match') !== -1; });
   return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+/* ================= Scenario wizard suite ================= */
+
+test('scenario A (ASTF): runbook has server-only + client-mask + start line', function () {
+  var r = TB.scenarios.buildTwoServer({
+    mode: 'astf', name: 'two_server', senderHost: 'trex-a', receiverHost: 'trex-b',
+    clientStart: '16.0.0.1', clientEnd: '16.0.0.255', serverStart: '48.0.0.1', serverEnd: '48.0.255.255',
+    traffic: 'http', rate: 100, cores: 4, mult: 2, durationSec: 60, rampupSec: 10, now: '2026-07-06'
+  });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var names = r.files.map(function (f) { return f.name; }).join(',');
+  if (names !== 'two_server.py,RUNBOOK.txt') { return { pass: false, detail: 'files: ' + names }; }
+  var rb = r.files[1].content;
+  var need = [
+    './t-rex-64 -i --astf --astf-server-only --cfg /etc/trex_cfg.yaml -c 4',
+    './t-rex-64 -i --astf --astf-client-mask 0x1 --cfg /etc/trex_cfg.yaml -c 4',
+    'start -f two_server.py -m 2 -d 60'
+  ];
+  for (var i = 0; i < need.length; i++) {
+    if (rb.indexOf(need[i]) === -1) { return { pass: false, detail: 'runbook missing: ' + TB.util.escapeHtml(need[i]) }; }
+  }
+  var okRamp = r.files[0].content.indexOf('c_glob_info.scheduler.rampup_sec = 10') !== -1;
+  return { pass: okRamp, detail: okRamp ? '' : 'profile missing rampup_sec' };
+});
+
+test('scenario A (STL): TX-only profile + latency stream + measure-side runbook', function () {
+  var r = TB.scenarios.buildTwoServer({
+    mode: 'stl', name: 'two_server_stl', senderHost: 'a', receiverHost: 'b',
+    clientStart: '16.0.0.1', clientEnd: '16.0.0.255', serverStart: '48.0.0.1', serverEnd: '48.0.255.255',
+    traffic: 'http', rate: 5000, cores: 4, mult: 1, durationSec: 60, addLatency: true, now: '2026-07-06'
+  });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var ok = r.files[0].content.indexOf('STLFlowLatencyStats') !== -1 &&
+    r.files[1].content.indexOf('-i --stl') !== -1 &&
+    r.files[1].content.indexOf('NOT automatic') !== -1;
+  return { pass: ok, detail: ok ? '' : 'missing latency stream or runbook notes' };
+});
+
+test('scenario B (STL): staggered-isg streams with additive pps', function () {
+  var r = TB.scenarios.buildRamp({ engine: 'stl', name: 'ramp_stl', low: 100, mid: 500, high: 1000, stageSec: 30, now: '2026-07-06' });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var m = r.model;
+  var pps = m.streams.map(function (s) { return s.mode.pps; }).join(',');
+  var isg = m.streams.map(function (s) { return s.isgUsec; }).join(',');
+  if (pps !== '100,400,500') { return { pass: false, detail: 'pps: ' + pps }; }
+  if (isg !== '0,30000000,60000000') { return { pass: false, detail: 'isg: ' + isg }; }
+  var c = r.files[0].content;
+  var ok = c.indexOf('pps=400') !== -1 && c.indexOf('isg=30000000') !== -1;
+  return { pass: ok, detail: ok ? '' : 'generated content missing stream values' };
+});
+
+test('scenario B (ASTF rampup): high cps + rampup_sec = 2 stages', function () {
+  var r = TB.scenarios.buildRamp({ engine: 'astf', name: 'ramp2', low: 100, mid: 500, high: 1000,
+    stageSec: 30, mechanism: 'rampup', traffic: 'http', now: '2026-07-06' });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var c = r.files[0].content;
+  var ok = c.indexOf('c_glob_info.scheduler.rampup_sec = 60') !== -1 && c.indexOf('cps=1000') !== -1;
+  return { pass: ok, detail: ok ? '' : 'missing rampup_sec=60 or cps=1000' };
+});
+
+test('scenario B (ASTF m-step): runbook multipliers mid/low and high/low', function () {
+  var r = TB.scenarios.buildRamp({ engine: 'astf', name: 'ramp', low: 100, mid: 500, high: 1000,
+    stageSec: 30, mechanism: 'm_step', traffic: 'http', now: '2026-07-06' });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var rb = r.files[1].content;
+  var ok = rb.indexOf('-m 1 -d 90') !== -1 && rb.indexOf('-m 5 -d 60') !== -1 && rb.indexOf('-m 10 -d 30') !== -1 &&
+    r.files[0].content.indexOf('cps=100') !== -1;
+  return { pass: ok, detail: ok ? '' : 'runbook: ' + TB.util.escapeHtml(rb.slice(0, 400)) };
+});
+
+test('scenario B: validation rejects non-increasing stages', function () {
+  var r = TB.scenarios.buildRamp({ engine: 'astf', low: 500, mid: 100, high: 1000, stageSec: 30,
+    mechanism: 'm_step', traffic: 'http' });
+  var ok = !r.ok && r.errors.some(function (e) { return e.indexOf('low < mid < high') !== -1; });
+  return { pass: ok, detail: ok ? '' : JSON.stringify(r.errors || 'ok=true') };
 });
 
 /* ---------------- run ---------------- */

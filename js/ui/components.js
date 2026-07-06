@@ -109,6 +109,28 @@
     return el('div', { class: 'section' }, [head, content]);
   };
 
+  // Shared <datalist> of well-known v3.06 avl/ pcaps for path fields.
+  var AVL_PCAPS = [
+    '../avl/delay_10_http_browsing_0.pcap',
+    '../avl/delay_10_http_get_0.pcap',
+    '../avl/delay_10_http_post_0.pcap',
+    '../avl/delay_10_https_0.pcap',
+    '../avl/delay_10_exchange_0.pcap',
+    '../avl/delay_10_oracle_0.pcap',
+    '../avl/delay_10_citrix_0.pcap',
+    '../avl/delay_10_smtp_0.pcap',
+    '../avl/delay_10_mail_pop_0.pcap',
+    '../avl/delay_10_sip_0.pcap',
+    '../avl/delay_dns_0.pcap'
+  ];
+
+  TB.ui.ensurePcapDatalist = function () {
+    if (document.getElementById('avl-pcaps')) { return; }
+    var dl = TB.ui.el('datalist', { id: 'avl-pcaps' });
+    AVL_PCAPS.forEach(function (p) { dl.appendChild(TB.ui.el('option', { value: p })); });
+    document.body.appendChild(dl);
+  };
+
   var toastTimer = null;
   TB.ui.toast = function (msg, kind) {
     var node = document.getElementById('toast');
