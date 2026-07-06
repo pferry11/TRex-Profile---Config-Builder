@@ -236,6 +236,9 @@ pre.code {
 .glob-col { border-left: 2px solid var(--border); padding-left: 10px; margin-bottom: 10px; }
 .range-label { min-width: 55px; padding-bottom: 12px; color: var(--text); font-size: 13px; }
 
+/* ---------- settings + cfg tabs ---------- */
+.settings-wrap { padding: 14px; max-width: 1100px; }
+
 /* ---------- scenarios tab ---------- */
 .scenarios-wrap { padding: 14px; max-width: 1100px; }
 .scenario-result { margin-top: 10px; }

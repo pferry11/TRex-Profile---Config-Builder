@@ -7,7 +7,9 @@
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },
     { id: 'astf', label: 'ASTF Profile', mount: function (c) { TB.ui.astfBuilder.mount(c); } },
     { id: 'scenarios', label: 'Scenarios', mount: function (c) { TB.ui.scenarios.mount(c); } },
-    { id: 'settings', label: 'Settings', mount: null }
+    { id: 'cfg', label: 'Platform Config', mount: function (c) { TB.ui.cfgBuilder.mount(c); },
+      onShow: function () { TB.ui.cfgBuilder.refresh(); } },
+    { id: 'settings', label: 'Settings', mount: function (c) { TB.ui.settingsUi.mount(c); } }
   ];
 
   function placeholder(container, label) {
@@ -88,6 +90,8 @@
         var pane = content.querySelector('[data-tab="' + id + '"]');
         if (tab.mount) { tab.mount(pane); } else { placeholder(pane, tab.label); }
         mounted[id] = true;
+      } else if (tab.onShow) {
+        tab.onShow();
       }
     }
 

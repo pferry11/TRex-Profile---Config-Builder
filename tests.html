@@ -28,6 +28,7 @@
 <script src="js/gen/stl.js"></script>
 <script src="js/gen/astf.js"></script>
 <script src="js/gen/scenarios.js"></script>
+<script src="js/gen/cfg.js"></script>
 
 <script>
 'use strict';
@@ -650,6 +651,131 @@ test('scenario B: validation rejects non-increasing stages', function () {
     mechanism: 'm_step', traffic: 'http' });
   var ok = !r.ok && r.errors.some(function (e) { return e.indexOf('low < mid < high') !== -1; });
   return { pass: ok, detail: ok ? '' : JSON.stringify(r.errors || 'ok=true') };
+});
+
+/* ================= trex_cfg.yaml suite ================= */
+var cgen = TB.gen.resolve('3.06', 'cfg');
+var CFGNOW = { now: '2026-07-06', trexVersion: '3.06' };
+
+function srvIp() {
+  return { id: 's1', name: 'simple', mgmtHost: '', trexDir: '/opt/trex/v3.06',
+    cores: null, portLimit: 2, portBandwidthGb: null,
+    interfaces: ['03:00.0', '03:00.1'],
+    ports: [{ mode: 'ip', ip: '1.1.1.1', defaultGw: '2.2.2.2' }, { mode: 'ip', ip: '2.2.2.2', defaultGw: '1.1.1.1' }],
+    platform: { enabled: false }, memory: { enabled: false },
+    limitMemory: null, prefix: null, enableZmqPub: null, telnetPort: null };
+}
+function srvMac() {
+  return { id: 's2', name: 'xl710', mgmtHost: '10.0.0.11', trexDir: '/opt/trex/v3.06',
+    cores: 4, portLimit: 2, portBandwidthGb: 40,
+    interfaces: ['08:00.0', '08:00.1'],
+    ports: [{ mode: 'mac', srcMac: '00:0c:29:55:37:bd', destMac: '00:0c:29:55:37:c7' },
+            { mode: 'mac', srcMac: '00:0c:29:55:37:c7', destMac: '00:0c:29:55:37:bd' }],
+    platform: { enabled: true, masterThreadId: 0, latencyThreadId: 5, dualIf: [{ socket: 0, threads: [1, 2, 3, 4, 6, 7] }] },
+    memory: { enabled: false }, limitMemory: null, prefix: null, enableZmqPub: true, telnetPort: null };
+}
+function srvBig() {
+  return { id: 's3', name: 'x710_big', mgmtHost: '', trexDir: '/opt/trex/v3.06',
+    cores: 7, portLimit: 4, portBandwidthGb: 10,
+    interfaces: ['02:00.0', '02:00.1', '84:00.0', '84:00.1'],
+    ports: [{ mode: 'ip', ip: '1.1.1.1', defaultGw: '1.1.1.2' }, { mode: 'ip', ip: '1.1.1.2', defaultGw: '1.1.1.1' },
+            { mode: 'ip', ip: '2.1.1.1', defaultGw: '2.1.1.2' }, { mode: 'ip', ip: '2.1.1.2', defaultGw: '2.1.1.1' }],
+    platform: { enabled: true, masterThreadId: 0, latencyThreadId: 8,
+      dualIf: [{ socket: 0, threads: [1, 2, 3, 4, 5, 6, 7] }, { socket: 1, threads: [9, 10, 11, 12, 13, 14, 15] }] },
+    memory: { enabled: true, dpFlows: 10048576 },
+    limitMemory: null, prefix: null, enableZmqPub: null, telnetPort: null };
+}
+
+var CFGHDR = function (serverLine) {
+  return '# -----------------------------------------------------------------------------\n' +
+    '# TRex Profile & Config Builder - platform config (trex_cfg.yaml)\n' +
+    '# Generated: 2026-07-06   Target: TRex v3.06\n' +
+    '# Server: ' + serverLine + '\n' +
+    '# Install as /etc/trex_cfg.yaml (or pass --cfg <path> to t-rex-64)\n' +
+    '# Find PCI addresses with: ./dpdk_setup_ports.py -s\n' +
+    '# -----------------------------------------------------------------------------\n';
+};
+
+var goldenCfgIp = CFGHDR('simple') +
+'- version          : 2\n' +
+'  interfaces       : ["03:00.0", "03:00.1"]\n' +
+'  port_limit       : 2\n' +
+'  port_info :\n' +
+'      - ip         : 1.1.1.1  # port 0\n' +
+'        default_gw : 2.2.2.2\n' +
+'      - ip         : 2.2.2.2  # port 1\n' +
+'        default_gw : 1.1.1.1\n';
+
+var goldenCfgMac = CFGHDR('xl710 (10.0.0.11)') +
+'- version          : 2\n' +
+'  interfaces       : ["08:00.0", "08:00.1"]\n' +
+'  port_limit       : 2\n' +
+'  c                : 4\n' +
+'  port_bandwidth_gb : 40\n' +
+'  enable_zmq_pub   : true\n' +
+'  platform :\n' +
+'      master_thread_id   : 0\n' +
+'      latency_thread_id  : 5\n' +
+'      dual_if :\n' +
+'          - socket   : 0\n' +
+'            threads  : [1,2,3,4,6,7]\n' +
+'  port_info :\n' +
+'      - dest_mac : [0x00,0x0c,0x29,0x55,0x37,0xc7]  # port 0\n' +
+'        src_mac  : [0x00,0x0c,0x29,0x55,0x37,0xbd]\n' +
+'      - dest_mac : [0x00,0x0c,0x29,0x55,0x37,0xbd]  # port 1\n' +
+'        src_mac  : [0x00,0x0c,0x29,0x55,0x37,0xc7]\n';
+
+test('cfg golden: IP mode (simple_cfg-like)', function () {
+  var r = cgen(srvIp(), CFGNOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  if (r.files[0].name !== 'trex_cfg_simple.yaml') { return { pass: false, detail: 'file: ' + r.files[0].name }; }
+  return r.files[0].content === goldenCfgIp ? { pass: true }
+    : { pass: false, detail: firstDiff(goldenCfgIp, r.files[0].content) };
+});
+
+test('cfg golden: MAC + platform (xl710-like)', function () {
+  var r = cgen(srvMac(), CFGNOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  return r.files[0].content === goldenCfgMac ? { pass: true }
+    : { pass: false, detail: firstDiff(goldenCfgMac, r.files[0].content) };
+});
+
+test('cfg structure: 2-socket + memory (x710_advance-like)', function () {
+  var r = cgen(srvBig(), CFGNOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  var c = r.files[0].content;
+  var need = ['- socket   : 0', '- socket   : 1', 'threads  : [9,10,11,12,13,14,15]', 'dp_flows : 10048576'];
+  for (var i = 0; i < need.length; i++) {
+    if (c.indexOf(need[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(need[i]) }; }
+  }
+  return { pass: true };
+});
+
+test('cfg structure: leading dash + single-element list shape', function () {
+  var c = cgen(srvBig(), CFGNOW).files[0].content;
+  var lines = c.split('\n').filter(function (l) { return l !== '' && l.indexOf('#') !== 0; });
+  if (lines[0].indexOf('- ') !== 0) { return { pass: false, detail: 'first key line: ' + TB.util.escapeHtml(lines[0]) }; }
+  for (var i = 1; i < lines.length; i++) {
+    if (lines[i].indexOf('  ') !== 0) {
+      return { pass: false, detail: 'line not indented under the list item: ' + TB.util.escapeHtml(lines[i]) };
+    }
+  }
+  return { pass: true };
+});
+
+test('cfg warnings: thread collision, core excess, mixed modes, iface count, cross-wiring', function () {
+  var fails = [];
+  var s = srvMac(); s.platform.latencyThreadId = 3;
+  if (!cgen(s).warnings.some(function (x) { return x.indexOf('latency_thread_id 3 is also listed') !== -1; })) { fails.push('thread-collision'); }
+  s = srvMac(); s.cores = 10;
+  if (!cgen(s).warnings.some(function (x) { return x.indexOf('exceeds the 6 thread(s)') !== -1; })) { fails.push('core-excess'); }
+  s = srvIp(); s.ports[1] = { mode: 'mac', srcMac: '00:00:00:00:00:01', destMac: '00:00:00:00:00:02' };
+  if (!cgen(s).warnings.some(function (x) { return x.indexOf('mix MAC and IP mode') !== -1; })) { fails.push('mixed-modes'); }
+  s = srvIp(); s.interfaces = ['03:00.0'];
+  if (!cgen(s).warnings.some(function (x) { return x.indexOf('port_limit is 2 but 1 interface') !== -1; })) { fails.push('iface-count'); }
+  s = srvMac(); s.ports[1].srcMac = '00:0c:29:55:37:aa';
+  if (!cgen(s).warnings.some(function (x) { return x.indexOf('not cross-wired') !== -1; })) { fails.push('cross-wiring'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
 });
 
 /* ---------------- run ---------------- */
