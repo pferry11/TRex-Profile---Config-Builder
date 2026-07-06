@@ -9,6 +9,8 @@
     { id: 'scenarios', label: 'Scenarios', mount: function (c) { TB.ui.scenarios.mount(c); } },
     { id: 'cfg', label: 'Platform Config', mount: function (c) { TB.ui.cfgBuilder.mount(c); },
       onShow: function () { TB.ui.cfgBuilder.refresh(); } },
+    { id: 'cli', label: 'CLI Builder', mount: function (c) { TB.ui.cliBuilder.mount(c); },
+      onShow: function () { TB.ui.cliBuilder.refresh(); } },
     { id: 'settings', label: 'Settings', mount: function (c) { TB.ui.settingsUi.mount(c); } }
   ];
 

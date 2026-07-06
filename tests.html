@@ -29,6 +29,7 @@
 <script src="js/gen/astf.js"></script>
 <script src="js/gen/scenarios.js"></script>
 <script src="js/gen/cfg.js"></script>
+<script src="js/gen/cli.js"></script>
 
 <script>
 'use strict';
@@ -761,6 +762,73 @@ test('cfg structure: leading dash + single-element list shape', function () {
     }
   }
   return { pass: true };
+});
+
+/* ================= CLI builder suite ================= */
+var clgen = TB.gen.resolve('3.06', 'cli');
+
+function cliModel(over) {
+  var m = { kind: 'cli', schemaVersion: 1, trexVersion: '3.06', meta: { name: 'test' },
+    mode: 'astf', cfgPath: '/etc/trex_cfg.yaml', cores: 8, mult: 2, durationSec: 60,
+    latencyPps: null, flowPortAffinity: false, astfServerOnly: false, astfClientMask: null,
+    profile: 'two_server.py', extraArgs: '', trexDir: '/opt/trex/v3.06' };
+  for (var k in over) { if (Object.prototype.hasOwnProperty.call(over, k)) { m[k] = over[k]; } }
+  return m;
+}
+
+test('cli table: command lines per mode', function () {
+  var cases = [
+    [cliModel({ astfClientMask: '0x1' }),
+     'sudo ./t-rex-64 -i --astf --cfg /etc/trex_cfg.yaml -c 8 --astf-client-mask 0x1'],
+    [cliModel({ astfServerOnly: true, mult: 1 }),
+     'sudo ./t-rex-64 -i --astf --cfg /etc/trex_cfg.yaml -c 8 --astf-server-only'],
+    [cliModel({ mode: 'stl', profile: 'imix_like.py', cores: 4 }),
+     'sudo ./t-rex-64 -i --stl --cfg /etc/trex_cfg.yaml -c 4'],
+    [cliModel({ mode: 'legacy', profile: 'cap2/dns.yaml', mult: 5, durationSec: 3600,
+                latencyPps: 1000, flowPortAffinity: true, cores: 4 }),
+     'sudo ./t-rex-64 -f cap2/dns.yaml --cfg /etc/trex_cfg.yaml -c 4 -m 5 -d 3600 -l 1000 -p'],
+    [cliModel({ extraArgs: '--no-scapy-server', astfClientMask: '0x3' }),
+     'sudo ./t-rex-64 -i --astf --cfg /etc/trex_cfg.yaml -c 8 --astf-client-mask 0x3 --no-scapy-server']
+  ];
+  for (var i = 0; i < cases.length; i++) {
+    var r = clgen(cases[i][0], NOW);
+    if (r.command !== cases[i][1]) {
+      return { pass: false, detail: 'case ' + i + ':\n<span class="exp">expected: ' +
+        TB.util.escapeHtml(cases[i][1]) + '</span>\n<span class="act">actual:   ' +
+        TB.util.escapeHtml(r.command) + '</span>' };
+    }
+  }
+  return { pass: true };
+});
+
+test('cli console: interactive start lines and server-only note', function () {
+  var r = clgen(cliModel({ astfClientMask: '0x1' }), NOW);
+  var c = r.files[1].content;
+  if (c.indexOf('trex> start -f two_server.py -m 2 -d 60 --client_mask 0x1') === -1) {
+    return { pass: false, detail: 'astf console: ' + TB.util.escapeHtml(c) };
+  }
+  r = clgen(cliModel({ mode: 'stl', profile: 'p.py', mult: 1 }), NOW);
+  if (r.files[1].content.indexOf('trex> start -f p.py -a -m 1 -d 60') === -1) {
+    return { pass: false, detail: 'stl console: ' + TB.util.escapeHtml(r.files[1].content) };
+  }
+  r = clgen(cliModel({ astfServerOnly: true, mult: 1 }), NOW);
+  var ok = r.files[1].content.indexOf('start -f') === -1 &&
+           r.files[1].content.indexOf('answers connections only') !== -1;
+  if (!ok) { return { pass: false, detail: 'server-only console should have no start line' }; }
+  r = clgen(cliModel({ mode: 'legacy', profile: 'x.yaml', mult: 1 }), NOW);
+  return { pass: r.files.length === 1, detail: 'legacy mode should emit only run_*.sh' };
+});
+
+test('cli warnings: cfg missing, server-only+mult, stl -l, bad mask, both flags', function () {
+  var fails = [];
+  if (!clgen(cliModel({ cfgPath: '' }), NOW).warnings.some(function (x) { return x.indexOf('No --cfg path') !== -1; })) { fails.push('cfg'); }
+  if (!clgen(cliModel({ astfServerOnly: true, mult: 2 }), NOW).warnings.some(function (x) { return x.indexOf('-m has no effect') !== -1; })) { fails.push('server+mult'); }
+  if (!clgen(cliModel({ mode: 'stl', latencyPps: 500 }), NOW).warnings.some(function (x) { return x.indexOf('does not use -l') !== -1; })) { fails.push('stl-l'); }
+  if (!clgen(cliModel({ astfClientMask: 'xyz' }), NOW).warnings.some(function (x) { return x.indexOf('not valid hex') !== -1; })) { fails.push('mask'); }
+  var r = clgen(cliModel({ astfServerOnly: true, astfClientMask: '0x1', mult: 1 }), NOW);
+  if (!r.warnings.some(function (x) { return x.indexOf('mutually exclusive') !== -1; }) ||
+      r.command.indexOf('--astf-server-only') === -1 || r.command.indexOf('client-mask') !== -1) { fails.push('both'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
 });
 
 test('cfg warnings: thread collision, core excess, mixed modes, iface count, cross-wiring', function () {
