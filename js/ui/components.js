@@ -77,6 +77,7 @@
         value: opts.value === null || opts.value === undefined ? '' : opts.value,
         placeholder: opts.placeholder || ''
       });
+      if (opts.datalist) { input.setAttribute('list', opts.datalist); }
       input.addEventListener('input', handle);
     }
     if (opts.width) { input.style.width = opts.width; }

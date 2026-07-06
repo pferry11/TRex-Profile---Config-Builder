@@ -26,6 +26,7 @@
 <script src="js/gen/registry.js"></script>
 <script src="js/gen/py.js"></script>
 <script src="js/gen/stl.js"></script>
+<script src="js/gen/astf.js"></script>
 
 <script>
 'use strict';
@@ -337,6 +338,241 @@ test('persist: save/load/delete profile round-trip', function () {
   TB.persist.deleteProfile('stl', 'udp_simple');
   var okDel = TB.persist.getProfile('stl', 'udp_simple') === null;
   return { pass: !!(okSave && okDel), detail: 'save=' + okSave + ' delete=' + okDel };
+});
+
+/* ================= ASTF suite ================= */
+var agen = TB.gen.resolve('3.06', 'astf');
+
+function astfIpGen() {
+  return {
+    client: { start: '16.0.0.0', end: '16.0.0.255', distribution: 'seq', perCore: null },
+    server: { start: '48.0.0.0', end: '48.0.255.255', distribution: 'seq', perCore: null },
+    ipOffset: '1.0.0.0'
+  };
+}
+function astfGlobals() {
+  function side() {
+    return { tcp: { mss: null, rxbufsize: null, txbufsize: null, initwnd: null, no_delay: null,
+                    do_rfc1323: null, keepinit: null, keepidle: null, keepintvl: null },
+             scheduler: { rampupSec: null }, ipv6: { enable: false, srcMsb: '', dstMsb: '' } };
+  }
+  return { client: side(), server: side() };
+}
+function astfModel(name, over) {
+  var m = { kind: 'astf', schemaVersion: 1, trexVersion: '3.06',
+            meta: { name: name, description: '', modified: '' },
+            ipGen: astfIpGen(), globals: astfGlobals(),
+            mode: 'pcap', capList: [], templates: [] };
+  for (var k in over) { if (Object.prototype.hasOwnProperty.call(over, k)) { m[k] = over[k]; } }
+  return m;
+}
+function httpTemplate(over) {
+  var t = {
+    id: 't1', tgName: null, cps: 1, assocPort: 80, stream: true,
+    client: { commands: [
+      { op: 'send', payload: { kind: 'httpRequest' } },
+      { op: 'recv', bytes: null }
+    ] },
+    server: { commands: [
+      { op: 'recv', bytes: null },
+      { op: 'send', payload: { kind: 'httpResponse', bodyBytes: 32768 } }
+    ] },
+    ipGenOverride: null
+  };
+  for (var k in over) { if (Object.prototype.hasOwnProperty.call(over, k)) { t[k] = over[k]; } }
+  return t;
+}
+
+var fxAstfHttp = astfModel('http_simple_like', {
+  capList: [{ file: '../avl/delay_10_http_browsing_0.pcap', cps: 2.776, port: null, sDelayUsec: null, ipGenOverride: null }]
+});
+var fxAstfProgram = astfModel('http_program', { mode: 'program', templates: [httpTemplate()] });
+var fxAstfRampup = (function () {
+  var m = JSON.parse(JSON.stringify(fxAstfHttp));
+  m.meta.name = 'rampup_like';
+  m.globals.client.scheduler.rampupSec = 5;
+  return m;
+})();
+var fxAstfGroups = astfModel('groups_like', { mode: 'program', templates: [
+  httpTemplate({ id: 't1', tgName: '1x', cps: 1, assocPort: 80 }),
+  httpTemplate({ id: 't2', tgName: '2x', cps: 2, assocPort: 81 })
+]});
+var fxAstfUdp = astfModel('udp_program', { mode: 'program', templates: [{
+  id: 't1', tgName: null, cps: 10, assocPort: 53, stream: false,
+  client: { commands: [
+    { op: 'send_msg', payload: { kind: 'text', text: 'ping-ping-ping' } },
+    { op: 'recv_msg', count: 1 }
+  ] },
+  server: { commands: [
+    { op: 'recv_msg', count: 1 },
+    { op: 'send_msg', payload: { kind: 'text', text: 'pong-pong-pong' } }
+  ] },
+  ipGenOverride: null
+}]});
+var fxAstfLoop = astfModel('http_loop', { mode: 'program', templates: [httpTemplate({
+  server: { commands: [
+    { op: 'recv', bytes: null },
+    { op: 'set_var', id: 'var2', value: 10 },
+    { op: 'set_label', name: 'a:' },
+    { op: 'delay_rand', minUsec: 100000, maxUsec: 500000 },
+    { op: 'send', payload: { kind: 'httpResponse', bodyBytes: 32768 } },
+    { op: 'jmp_nz', id: 'var2', label: 'a:' }
+  ] }
+})]});
+
+var AHDR = function (name) {
+  return '# -----------------------------------------------------------------------------\n' +
+    '# TRex Profile & Config Builder - ASTF profile\n' +
+    '# Generated: 2026-07-06\n' +
+    '# Target: TRex v3.06\n' +
+    '# Validate on the TRex box: ./astf-sim -f ' + name + '.py --full -o /tmp/\n' +
+    '# Re-edit: load ' + name + '.trexb.json in TRex Profile & Config Builder\n' +
+    '# -----------------------------------------------------------------------------\n';
+};
+
+var astfCommon =
+'from trex.astf.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class ASTFGenProfile(object):\n' +
+'\n' +
+'    def get_profile(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'\n' +
+'        # ip generator\n' +
+'        ip_gen_c = ASTFIPGenDist(ip_range=["16.0.0.0", "16.0.0.255"], distribution="seq")\n' +
+'        ip_gen_s = ASTFIPGenDist(ip_range=["48.0.0.0", "48.0.255.255"], distribution="seq")\n' +
+'        ip_gen = ASTFIPGen(glob=ASTFIPGenGlobal(ip_offset="1.0.0.0"),\n' +
+'                           dist_client=ip_gen_c,\n' +
+'                           dist_server=ip_gen_s)\n';
+
+var astfFooter =
+'\n\n\n' +
+'def register():\n' +
+'    return ASTFGenProfile()\n';
+
+var goldenAstfHttp = AHDR('http_simple_like') + astfCommon +
+'\n' +
+'        return ASTFProfile(default_ip_gen=ip_gen,\n' +
+'                           cap_list=[\n' +
+'                               ASTFCapInfo(file="../avl/delay_10_http_browsing_0.pcap", cps=2.776)\n' +
+'                           ])' + astfFooter;
+
+var goldenAstfRampup = AHDR('rampup_like') + astfCommon +
+'\n' +
+'        c_glob_info = ASTFGlobalInfo()\n' +
+'        c_glob_info.scheduler.rampup_sec = 5\n' +
+'\n' +
+'        return ASTFProfile(default_ip_gen=ip_gen,\n' +
+'                           default_c_glob_info=c_glob_info,\n' +
+'                           cap_list=[\n' +
+'                               ASTFCapInfo(file="../avl/delay_10_http_browsing_0.pcap", cps=2.776)\n' +
+'                           ])' + astfFooter;
+
+function astfGoldenTest(name, fixture, golden, expectFile) {
+  test(name, function () {
+    var r = agen(fixture, NOW);
+    if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+    if (r.files[0].name !== expectFile) { return { pass: false, detail: 'file name ' + r.files[0].name + ' != ' + expectFile }; }
+    if (r.files[0].content === golden) { return { pass: true }; }
+    return { pass: false, detail: firstDiff(golden, r.files[0].content) };
+  });
+}
+
+function astfContains(name, fixture, needles, expectWarnings) {
+  test(name, function () {
+    var r = agen(fixture, NOW);
+    if (!expectWarnings && r.warnings.length) {
+      return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') };
+    }
+    var c = r.files[0].content;
+    for (var i = 0; i < needles.length; i++) {
+      if (c.indexOf(needles[i]) === -1) {
+        return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(needles[i]) };
+      }
+    }
+    return { pass: true };
+  });
+}
+
+astfGoldenTest('ASTF golden: pcap mode (http_simple-like)', fxAstfHttp, goldenAstfHttp, 'http_simple_like.py');
+astfGoldenTest('ASTF golden: rampup_sec (param_sch_rampup-like)', fxAstfRampup, goldenAstfRampup, 'rampup_like.py');
+
+astfContains('ASTF program mode (http_manual_commands-like)', fxAstfProgram, [
+  'prog_c = ASTFProgram()',
+  'prog_c.send(http_req)',
+  'prog_c.recv(len(http_response))',
+  'prog_s = ASTFProgram()',
+  'prog_s.recv(len(http_req))',
+  'prog_s.send(http_response)',
+  'temp_c = ASTFTCPClientTemplate(program=prog_c, ip_gen=ip_gen, port=80, cps=1)',
+  'temp_s = ASTFTCPServerTemplate(program=prog_s, assoc=ASTFAssociationRule(80))',
+  'template = ASTFTemplate(client_template=temp_c, server_template=temp_s)',
+  'templates=[template])'
+]);
+
+astfContains('ASTF program loop (http_manual_commands_loop-like)', fxAstfLoop, [
+  'prog_s.set_var("var2", 10)',
+  'prog_s.set_label("a:")',
+  'prog_s.delay_rand(100000, 500000)',
+  'prog_s.jmp_nz("var2", "a:")'
+]);
+
+astfContains('ASTF two weighted templates (template_groups-like)', fxAstfGroups, [
+  'temp_c_1 = ASTFTCPClientTemplate(program=prog_c_1, ip_gen=ip_gen, port=80, cps=1)',
+  'temp_c_2 = ASTFTCPClientTemplate(program=prog_c_2, ip_gen=ip_gen, port=81, cps=2)',
+  'temp_s_2 = ASTFTCPServerTemplate(program=prog_s_2, assoc=ASTFAssociationRule(81))',
+  "template_1 = ASTFTemplate(client_template=temp_c_1, server_template=temp_s_1, tg_name='1x')",
+  "template_2 = ASTFTemplate(client_template=temp_c_2, server_template=temp_s_2, tg_name='2x')",
+  'templates=[template_1, template_2])'
+]);
+
+astfContains('ASTF UDP program (stream=False, send_msg/recv_msg)', fxAstfUdp, [
+  'prog_c = ASTFProgram(stream=False)',
+  'prog_c.send_msg(payload)',
+  'prog_c.recv_msg(1)',
+  'prog_s = ASTFProgram(stream=False)',
+  'prog_s.send_msg(payload_2)'
+]);
+
+test('ASTF round-trip: model -> JSON -> parse -> regenerate identical', function () {
+  var once = agen(fxAstfGroups, NOW).files[0].content;
+  var twice = agen(JSON.parse(JSON.stringify(fxAstfGroups)), NOW).files[0].content;
+  return { pass: once === twice, detail: once === twice ? '' : firstDiff(once, twice) };
+});
+
+test('ASTF warning: templates share association port', function () {
+  var m = JSON.parse(JSON.stringify(fxAstfGroups));
+  m.templates[1].assocPort = 80;
+  var w = agen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('share association port 80') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+test('ASTF warning: jmp_nz to unknown label', function () {
+  var m = JSON.parse(JSON.stringify(fxAstfLoop));
+  m.templates[0].server.commands[5].label = 'b:';
+  var w = agen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('unknown label "b:"') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+test('ASTF warning: rampup_sec on server side only', function () {
+  var m = JSON.parse(JSON.stringify(fxAstfHttp));
+  m.globals.server.scheduler.rampupSec = 5;
+  var w = agen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('server side only') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+test('ASTF warning: recv bytes mismatch vs peer sends', function () {
+  var m = JSON.parse(JSON.stringify(fxAstfProgram));
+  m.templates[0].client.commands[1].bytes = 555;
+  var w = agen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('recv(555) does not match') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
 });
 
 /* ---------------- run ---------------- */

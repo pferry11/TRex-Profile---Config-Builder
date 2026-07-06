@@ -5,7 +5,7 @@
 
   var TABS = [
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },
-    { id: 'astf', label: 'ASTF Profile', mount: null },
+    { id: 'astf', label: 'ASTF Profile', mount: function (c) { TB.ui.astfBuilder.mount(c); } },
     { id: 'scenarios', label: 'Scenarios', mount: null },
     { id: 'settings', label: 'Settings', mount: null }
   ];

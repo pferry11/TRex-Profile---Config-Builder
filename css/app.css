@@ -225,6 +225,17 @@ pre.code {
 .hl-com { color: #8b949e; font-style: italic; }
 .hl-num { color: #d2a8ff; }
 
+/* ---------- ASTF builder ---------- */
+.cmd-op {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  min-width: 90px;
+  padding-bottom: 8px;
+}
+.glob-col { border-left: 2px solid var(--border); padding-left: 10px; margin-bottom: 10px; }
+.range-label { min-width: 55px; padding-bottom: 12px; color: var(--text); font-size: 13px; }
+
 /* ---------- toast ---------- */
 #toast {
   position: fixed;
