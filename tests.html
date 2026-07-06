@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TRex Builder - self tests</title>
+<style>
+  body { font-family: Consolas, monospace; background: #14171c; color: #d7dce2; margin: 20px; }
+  h1 { font-size: 18px; }
+  .test { padding: 6px 10px; margin: 4px 0; border-radius: 4px; }
+  .pass { background: #16321c; border-left: 4px solid #3fb950; }
+  .fail { background: #3a1a1c; border-left: 4px solid #f85149; }
+  .summary { margin: 14px 0; font-size: 16px; font-weight: bold; }
+  pre.diff { background: #0d1015; padding: 10px; overflow-x: auto; font-size: 12px; }
+  .exp { color: #3fb950; } .act { color: #f85149; }
+</style>
+</head>
+<body>
+<h1>TRex Profile &amp; Config Builder — generator self tests</h1>
+<div id="summary" class="summary">running...</div>
+<div id="results"></div>
+
+<script src="js/core/util.js"></script>
+<script src="js/core/store.js"></script>
+<script src="js/core/persist.js"></script>
+<script src="js/core/settings.js"></script>
+<script src="js/gen/registry.js"></script>
+<script src="js/gen/py.js"></script>
+<script src="js/gen/stl.js"></script>
+
+<script>
+'use strict';
+/* ---------------- fixture helpers ---------------- */
+function baseStream() {
+  return {
+    id: 's1', name: 'S0', enabled: true,
+    packet: {
+      l2: { srcMac: null, dstMac: null },
+      vlan: { enabled: false, id: 100, prio: 0 },
+      l3: { type: 'ipv4', src: '16.0.0.1', dst: '48.0.0.1', tos: null, ttl: null },
+      l4: { type: 'udp', sport: 1025, dport: 12, tcpFlags: null },
+      payload: { mode: 'pad', frameSize: 64, frameSizeTunable: null, fill: 'x', rawScapy: null }
+    },
+    mode: { type: 'cont', pps: 100, totalPkts: null, pktsPerBurst: null, ibgUsec: null, count: null },
+    isgUsec: 0,
+    chain: { selfStart: true, next: null, actionCount: null },
+    vm: { cacheSize: null, vars: [], tuple: null },
+    flowStats: { type: 'none', pgId: null, addPortId: false }
+  };
+}
+function model(name, streams, tunables) {
+  return { kind: 'stl', schemaVersion: 1, trexVersion: '3.06',
+           meta: { name: name, description: '', modified: '' },
+           tunables: tunables || [], streams: streams };
+}
+var NOW = { now: '2026-07-06' };
+var gen = TB.gen.resolve('3.06', 'stl');
+
+/* ---------------- fixtures ---------------- */
+var fxMinimal = (function () {
+  var s = baseStream();
+  s.packet.payload.frameSizeTunable = 'size';
+  return model('udp_simple', [s], [{ name: 'size', type: 'int', default: 64, help: 'frame size' }]);
+})();
+
+var fxImix = (function () {
+  var rows = [{ size: 60, pps: 28, isg: 0 }, { size: 590, pps: 16, isg: 0.1 }, { size: 1514, pps: 4, isg: 0.2 }];
+  var streams = rows.map(function (row, i) {
+    var s = baseStream();
+    s.id = 's' + (i + 1); s.name = 'S' + i;
+    s.packet.payload.frameSize = row.size;
+    s.mode.pps = row.pps;
+    s.isgUsec = row.isg;
+    s.vm.vars = [
+      { name: 'ip_src', sizeBytes: 4, op: 'inc', min: '16.0.0.1', max: '16.0.0.254', step: 1, writeTo: 'IP.src', fixChecksum: true },
+      { name: 'ip_dst', sizeBytes: 4, op: 'inc', min: '48.0.0.1', max: '48.0.0.254', step: 1, writeTo: 'IP.dst', fixChecksum: true }
+    ];
+    return s;
+  });
+  return model('imix_like', streams);
+})();
+
+var fxChained = (function () {
+  var s0 = baseStream();
+  s0.isgUsec = 10;
+  s0.mode = { type: 'single_burst', pps: 10, totalPkts: 1000, pktsPerBurst: null, ibgUsec: null, count: null };
+  s0.chain = { selfStart: true, next: 'S1', actionCount: null };
+  var s1 = baseStream();
+  s1.id = 's2'; s1.name = 'S1';
+  s1.packet.l4.dport = 13;
+  s1.mode = { type: 'multi_burst', pps: 1000, totalPkts: null, pktsPerBurst: 4, ibgUsec: 1000000, count: 5 };
+  s1.chain = { selfStart: false, next: null, actionCount: null };
+  return model('burst_chain', [s0, s1]);
+})();
+
+var fxLatency = (function () {
+  var s = baseStream();
+  s.mode.pps = 1000;
+  s.flowStats = { type: 'latency', pgId: 5, addPortId: true };
+  return model('latency_stream', [s]);
+})();
+
+/* ---------------- goldens (verified via Node + python compile) ---------------- */
+var HDR = function (name) {
+  return '# -----------------------------------------------------------------------------\n' +
+    '# TRex Profile & Config Builder - STL profile\n' +
+    '# Generated: 2026-07-06\n' +
+    '# Target: TRex v3.06\n' +
+    '# Validate on the TRex box: ./stl-sim -f ' + name + '.py -o /tmp/out.pcap -l 50\n' +
+    '# Re-edit: load ' + name + '.trexb.json in TRex Profile & Config Builder\n' +
+    '# -----------------------------------------------------------------------------\n';
+};
+
+var goldenMinimal = HDR('udp_simple') +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+'\n' +
+'    def create_stream_1(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, args.size - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S0',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(pps=100))\n' +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+"        parser.add_argument('--size', type=int, default=64, help='frame size')\n" +
+'        args = parser.parse_args(tunables)\n' +
+'        return [self.create_stream_1(args)]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+function imixStream(n, name, size, pps, isg) {
+  return '\n    def create_stream_' + n + '(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, " + size + " - len(base_pkt)) * 'x'\n" +
+'        vm = STLVM()\n' +
+'        vm.var(name="ip_src", min_value="16.0.0.1", max_value="16.0.0.254", size=4, op="inc")\n' +
+'        vm.var(name="ip_dst", min_value="48.0.0.1", max_value="48.0.0.254", size=4, op="inc")\n' +
+'        vm.write(fv_name="ip_src", pkt_offset="IP.src")\n' +
+'        vm.write(fv_name="ip_dst", pkt_offset="IP.dst")\n' +
+'        vm.fix_chksum()\n' +
+'        return STLStream(\n' +
+"            name='" + name + "',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad, vm=vm),\n' +
+'            mode=STLTXCont(pps=' + pps + ')' + (isg ? ',\n            isg=' + isg + ')' : ')') + '\n';
+}
+
+var goldenImix = HDR('imix_like') +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+imixStream(1, 'S0', 60, 28, 0) +
+imixStream(2, 'S1', 590, 16, 0.1) +
+imixStream(3, 'S2', 1514, 4, 0.2) +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'        return [\n' +
+'            self.create_stream_1(args),\n' +
+'            self.create_stream_2(args),\n' +
+'            self.create_stream_3(args),\n' +
+'        ]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+var goldenChained = HDR('burst_chain') +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+'\n' +
+'    def create_stream_1(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S0',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXSingleBurst(pps=10, total_pkts=1000),\n' +
+'            isg=10,\n' +
+"            next='S1')\n" +
+'\n' +
+'    def create_stream_2(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=13,sport=1025)\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S1',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXMultiBurst(pps=1000, pkts_per_burst=4, ibg=1000000, count=5),\n' +
+'            self_start=False)\n' +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'        return [\n' +
+'            self.create_stream_1(args),\n' +
+'            self.create_stream_2(args),\n' +
+'        ]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+var goldenLatency = HDR('latency_stream') +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+'\n' +
+'    def create_stream_1(self, args, port_id):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S0',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(pps=1000),\n' +
+'            flow_stats=STLFlowLatencyStats(pg_id=5 + port_id))\n' +
+'\n' +
+'    def get_streams(self, port_id, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'        return [self.create_stream_1(args, port_id)]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+/* ---------------- test runner ---------------- */
+var tests = [];
+function test(name, fn) { tests.push({ name: name, fn: fn }); }
+
+function goldenTest(name, fixture, golden, expectFile) {
+  test(name, function () {
+    var r = gen(fixture, NOW);
+    if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+    if (r.files[0].name !== expectFile) { return { pass: false, detail: 'file name ' + r.files[0].name + ' != ' + expectFile }; }
+    if (r.files[0].content === golden) { return { pass: true }; }
+    return { pass: false, detail: firstDiff(golden, r.files[0].content) };
+  });
+}
+
+function firstDiff(exp, act) {
+  var e = exp.split('\n'), a = act.split('\n');
+  for (var i = 0; i < Math.max(e.length, a.length); i++) {
+    if (e[i] !== a[i]) {
+      return 'first difference at line ' + (i + 1) + ':\n' +
+        '<span class="exp">expected: ' + TB.util.escapeHtml(JSON.stringify(e[i])) + '</span>\n' +
+        '<span class="act">actual:   ' + TB.util.escapeHtml(JSON.stringify(a[i])) + '</span>';
+    }
+  }
+  return 'contents differ only in length';
+}
+
+goldenTest('golden: minimal cont UDP with size tunable (udp_1pkt_simple-like)', fxMinimal, goldenMinimal, 'udp_simple.py');
+goldenTest('golden: 3-stream IMIX with VM vars (imix-like)', fxImix, goldenImix, 'imix_like.py');
+goldenTest('golden: chained single-burst -> multi-burst (multi_burst_2st_1000pkt-like)', fxChained, goldenChained, 'burst_chain.py');
+goldenTest('golden: latency flow-stats with port_id pg_id (flow_stats_latency-like)', fxLatency, goldenLatency, 'latency_stream.py');
+
+test('round-trip: model -> JSON -> parse -> regenerate identical', function () {
+  var once = gen(fxImix, NOW).files[0].content;
+  var twice = gen(JSON.parse(JSON.stringify(fxImix)), NOW).files[0].content;
+  return { pass: once === twice, detail: once === twice ? '' : firstDiff(once, twice) };
+});
+
+test('warning: frame size below 60 bytes', function () {
+  var m = JSON.parse(JSON.stringify(fxMinimal));
+  m.tunables = [];
+  m.streams[0].packet.payload.frameSizeTunable = null;
+  m.streams[0].packet.payload.frameSize = 40;
+  var w = gen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('below 60 bytes') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+test('warning: duplicate latency pg_id', function () {
+  var m = JSON.parse(JSON.stringify(fxLatency));
+  var s2 = JSON.parse(JSON.stringify(m.streams[0]));
+  s2.id = 's2'; s2.name = 'S1';
+  m.streams.push(s2);
+  var w = gen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('share latency pg_id') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+test('warning: next references missing stream', function () {
+  var m = JSON.parse(JSON.stringify(fxChained));
+  m.streams[0].chain.next = 'S9';
+  var w = gen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('"S9" does not exist') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+test('warning: var and tuple write to the same offset', function () {
+  var m = JSON.parse(JSON.stringify(fxImix));
+  m.streams = [m.streams[0]];
+  m.streams[0].vm.tuple = { name: 'tuple', ipMin: '16.0.0.1', ipMax: '16.0.0.2',
+    portMin: 1025, portMax: 2048, limitFlows: 10000, writeIpTo: 'IP.src', writePortTo: 'UDP.sport' };
+  var w = gen(m, NOW).warnings;
+  var ok = w.some(function (x) { return x.indexOf('write to the same offset') !== -1; });
+  return { pass: ok, detail: 'warnings: ' + w.join(' | ') };
+});
+
+test('tuple generator emission (tuple_var + writes + fix_chksum)', function () {
+  var s = baseStream();
+  s.vm.tuple = { name: 'tuple', ipMin: '16.0.0.1', ipMax: '16.0.0.2',
+    portMin: 1025, portMax: 2048, limitFlows: 10000, writeIpTo: 'IP.src', writePortTo: 'UDP.sport' };
+  var c = gen(model('tuple_test', [s]), NOW).files[0].content;
+  var need = [
+    'vm.tuple_var(name="tuple", ip_min="16.0.0.1", ip_max="16.0.0.2", port_min=1025, port_max=2048, limit_flows=10000)',
+    'vm.write(fv_name="tuple.ip", pkt_offset="IP.src")',
+    'vm.write(fv_name="tuple.port", pkt_offset="UDP.sport")',
+    'vm.fix_chksum()'
+  ];
+  for (var i = 0; i < need.length; i++) {
+    if (c.indexOf(need[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(need[i]) }; }
+  }
+  return { pass: true };
+});
+
+test('version registry: 3.06 resolves, unknown version does not', function () {
+  var ok = typeof TB.gen.resolve('3.06', 'stl') === 'function' && TB.gen.resolve('9.99', 'stl') === null;
+  return { pass: ok, detail: 'versions: ' + TB.gen.versions().join(',') };
+});
+
+test('persist: save/load/delete profile round-trip', function () {
+  TB.persist.saveProfile(fxMinimal);
+  var back = TB.persist.getProfile('stl', 'udp_simple');
+  var okSave = back && JSON.stringify(back) === JSON.stringify(fxMinimal);
+  TB.persist.deleteProfile('stl', 'udp_simple');
+  var okDel = TB.persist.getProfile('stl', 'udp_simple') === null;
+  return { pass: !!(okSave && okDel), detail: 'save=' + okSave + ' delete=' + okDel };
+});
+
+/* ---------------- run ---------------- */
+var results = document.getElementById('results');
+var passCount = 0;
+tests.forEach(function (t) {
+  var out;
+  try { out = t.fn(); }
+  catch (e) { out = { pass: false, detail: 'threw: ' + TB.util.escapeHtml(e.message) }; }
+  var div = document.createElement('div');
+  div.className = 'test ' + (out.pass ? 'pass' : 'fail');
+  div.innerHTML = (out.pass ? 'PASS ' : 'FAIL ') + TB.util.escapeHtml(t.name) +
+    (out.pass || !out.detail ? '' : '<pre class="diff">' + out.detail + '</pre>');
+  results.appendChild(div);
+  if (out.pass) { passCount++; }
+});
+document.getElementById('summary').textContent = passCount + ' / ' + tests.length + ' tests passed';
+document.getElementById('summary').style.color = passCount === tests.length ? '#3fb950' : '#f85149';
+</script>
+</body>
+</html>
