@@ -46,7 +46,8 @@
         box.appendChild(bar);
         var out = el('div', {});
         box.appendChild(out);
-        TB.ui.output.render(out, { result: { files: res.files, warnings: res.warnings }, model: res.model });
+        TB.ui.output.render(out, { result: { files: res.files, warnings: res.warnings },
+          model: res.model, validateKind: res.model.kind });
       }
 
       /* ================= Wizard A: two-server send/receive ================= */

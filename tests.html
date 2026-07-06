@@ -23,6 +23,7 @@
 <script src="js/core/store.js"></script>
 <script src="js/core/persist.js"></script>
 <script src="js/core/settings.js"></script>
+<script src="js/core/backend.js"></script>
 <script src="js/gen/registry.js"></script>
 <script src="js/gen/py.js"></script>
 <script src="js/gen/stl.js"></script>
@@ -328,6 +329,15 @@ test('tuple generator emission (tuple_var + writes + fix_chksum)', function () {
     if (c.indexOf(need[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(need[i]) }; }
   }
   return { pass: true };
+});
+
+test('backend bridge: unavailable by default (file:// / no server), API surface present', function () {
+  var ok = TB.backend &&
+    TB.backend.available === false &&
+    typeof TB.backend.listPcaps === 'function' &&
+    typeof TB.backend.validate === 'function' &&
+    typeof TB.backend.probe === 'function';
+  return { pass: !!ok, detail: 'available=' + (TB.backend && TB.backend.available) };
 });
 
 test('version registry: 3.06 resolves, unknown version does not', function () {

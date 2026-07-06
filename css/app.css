@@ -245,6 +245,54 @@ pre.code {
 .btn-generate { border-color: var(--accent); color: var(--accent); font-weight: 600; margin-top: 6px; }
 .btn-generate:hover { background: var(--accent); color: #fff; }
 
+/* ---------- modal + backend features ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal-box {
+  background: var(--bg-pane);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: min(520px, 90vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.modal-body { padding: 12px 14px; overflow-y: auto; }
+.browse-list { max-height: 45vh; overflow-y: auto; margin-top: 8px; }
+.browse-item {
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+.browse-item:hover { background: var(--bg-hover); color: var(--accent); }
+.validate-area { margin-bottom: 8px; }
+.validate-result {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.validate-result.ok { border: 1px solid var(--ok); color: var(--ok); }
+.validate-result.err { border: 1px solid var(--err); color: var(--err); }
+
 /* ---------- toast ---------- */
 #toast {
   position: fixed;

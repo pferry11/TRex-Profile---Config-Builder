@@ -34,6 +34,7 @@
       var codeEl = el('pre', { class: 'code' });
       var tabsEl = el('div', { class: 'file-tabs' });
       var actionsEl = el('div', { class: 'output-actions' });
+      var validateEl = el('div', { class: 'validate-area' });
 
       function modelFileName() {
         var name = (model && model.meta && model.meta.name) ? model.meta.name : 'model';
@@ -71,6 +72,34 @@
             onclick: function () { TB.util.downloadText(modelFileName(), JSON.stringify(model, null, 2)); }
           }));
         }
+
+        /* server-side simulator validation (only with the Flask backend up) */
+        if (opts.validateKind && TB.backend && TB.backend.available && /\.py$/.test(f.name)) {
+          actionsEl.appendChild(el('button', {
+            class: 'btn',
+            text: 'Validate on server',
+            title: 'run ' + opts.validateKind + '-sim against this profile on the server',
+            onclick: function () {
+              validateEl.innerHTML = '';
+              validateEl.appendChild(el('div', { class: 'field-hint', text: 'running ' + opts.validateKind + '-sim…' }));
+              TB.backend.validate(opts.validateKind, f.content).then(function (res) {
+                validateEl.innerHTML = '';
+                var ok = res.exitCode === 0;
+                validateEl.appendChild(el('div', {
+                  class: 'validate-result ' + (ok ? 'ok' : 'err'),
+                  text: (ok ? 'PASS' : 'FAIL') + ' - exit code ' + res.exitCode + '  (' + res.command + ')'
+                }));
+                var out = (res.stdout || '') + (res.stderr ? '\n--- stderr ---\n' + res.stderr : '');
+                if (out.trim()) {
+                  validateEl.appendChild(el('pre', { class: 'code', text: out.trim() }));
+                }
+              }).catch(function (e) {
+                validateEl.innerHTML = '';
+                validateEl.appendChild(el('div', { class: 'validate-result err', text: 'Validation call failed: ' + e.message }));
+              });
+            }
+          }));
+        }
       }
 
       if (result.files.length > 1) {
@@ -85,6 +114,7 @@
       }
 
       container.appendChild(actionsEl);
+      container.appendChild(validateEl);
       container.appendChild(codeEl);
       renderActive();
     }

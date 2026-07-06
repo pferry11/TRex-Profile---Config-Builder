@@ -115,7 +115,7 @@
             }));
             return;
           }
-          TB.ui.output.render(outputPane, { result: gen(model), model: model });
+          TB.ui.output.render(outputPane, { result: gen(model), model: model, validateKind: 'astf' });
         }, 120);
       }
 
@@ -339,6 +339,11 @@
           width: '280px', datalist: 'avl-pcaps',
           hint: 'pcap dir setting: ' + TB.settings.get().defaults.pcapDir,
           onChange: function (v) { c.file = v || ''; renderList(); regen(); } }));
+        var browse = TB.ui.pcapBrowseButton('avl', function (dir, file) {
+          c.file = '../' + dir + '/' + file;
+          renderList(); renderEditor(); regen();
+        });
+        if (browse) { row.appendChild(browse); }
         row.appendChild(field({ label: 'cps (at -m 1)', type: 'float', value: c.cps, width: '80px',
           onChange: function (v) { c.cps = v === null ? 1 : v; renderList(); regen(); } }));
         row.appendChild(field({ label: 'Port pin (opt.)', type: 'int', value: c.port, width: '70px',

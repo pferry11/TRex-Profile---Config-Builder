@@ -234,6 +234,11 @@
         r1.appendChild(field({ label: 'Pcap path (relative to the TRex dir)', type: 'text', value: c.name,
           width: '230px', datalist: 'cap2-pcaps',
           onChange: function (v) { c.name = v || ''; renderList(); regen(); } }));
+        var browse = TB.ui.pcapBrowseButton('cap2', function (dir, file) {
+          c.name = dir + '/' + file;
+          renderList(); renderEditor(); regen();
+        });
+        if (browse) { r1.appendChild(browse); }
         r1.appendChild(field({ label: 'cps', type: 'float', value: c.cps, width: '70px',
           onChange: function (v) { c.cps = v === null ? 1 : v; renderList(); regen(); } }));
         r1.appendChild(field({ label: 'ipg (µs)', type: 'int', value: c.ipg, width: '80px',

@@ -152,6 +152,73 @@
     TB.ui.ensureDatalist('cap2-pcaps', CAP2_PCAPS.concat(AVL_PCAPS.map(function (p) { return p.replace('../', ''); })));
   };
 
+  /* Simple modal; returns { close } */
+  TB.ui.modal = function (title, bodyEl) {
+    var el = TB.ui.el;
+    var overlay = el('div', { class: 'modal-overlay' });
+    function close() {
+      if (overlay.parentNode) { overlay.parentNode.removeChild(overlay); }
+    }
+    var box = el('div', { class: 'modal-box' }, [
+      el('div', { class: 'modal-head' }, [
+        el('span', { text: title }),
+        el('button', { class: 'btn btn-small', text: '✕', onclick: close })
+      ]),
+      el('div', { class: 'modal-body' }, [bodyEl])
+    ]);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) { close(); } });
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    return { close: close };
+  };
+
+  /* "Browse…" button for pcap path fields; only rendered when the Flask
+   * backend is up. onPick receives (dir, file). */
+  TB.ui.pcapBrowseButton = function (defaultDir, onPick) {
+    var el = TB.ui.el;
+    if (!TB.backend || !TB.backend.available) { return null; }
+    return el('button', { class: 'btn btn-small', text: 'Browse…',
+      title: 'list pcaps under ' + (TB.backend.trexDir || 'the TRex dir'),
+      onclick: function () {
+        var body = el('div', {});
+        var listBox = el('div', { class: 'browse-list' });
+        var dirInput = el('input', { type: 'text', value: defaultDir || 'avl' });
+        var modal;
+
+        function load() {
+          listBox.innerHTML = '';
+          listBox.appendChild(el('div', { class: 'field-hint', text: 'loading…' }));
+          TB.backend.listPcaps(dirInput.value).then(function (data) {
+            listBox.innerHTML = '';
+            if (!data.files.length) {
+              listBox.appendChild(el('div', { class: 'field-hint', text: 'no .pcap/.cap files in ' + data.dir }));
+              return;
+            }
+            data.files.forEach(function (f) {
+              listBox.appendChild(el('div', { class: 'browse-item', text: f,
+                onclick: function () { onPick(data.dir, f); modal.close(); } }));
+            });
+          }).catch(function (e) {
+            listBox.innerHTML = '';
+            listBox.appendChild(el('div', { class: 'field-error', text: e.message }));
+          });
+        }
+
+        var bar = el('div', { class: 'field-row' }, [
+          el('label', { class: 'field' }, [el('span', { class: 'field-label', text: 'directory under TRex dir' }), dirInput]),
+          el('button', { class: 'btn btn-small', text: 'Load', onclick: load })
+        ]);
+        ['avl', 'cap2'].forEach(function (d) {
+          bar.appendChild(el('button', { class: 'btn btn-small btn-secondary', text: d,
+            onclick: function () { dirInput.value = d; load(); } }));
+        });
+        body.appendChild(bar);
+        body.appendChild(listBox);
+        modal = TB.ui.modal('Browse pcaps on ' + (TB.backend.trexDir || 'the TRex box'), body);
+        load();
+      } });
+  };
+
   var toastTimer = null;
   TB.ui.toast = function (msg, kind) {
     var node = document.getElementById('toast');

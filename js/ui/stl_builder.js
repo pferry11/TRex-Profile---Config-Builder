@@ -77,7 +77,7 @@
             }));
             return;
           }
-          TB.ui.output.render(outputPane, { result: gen(model), model: model });
+          TB.ui.output.render(outputPane, { result: gen(model), model: model, validateKind: 'stl' });
         }, 120);
       }
 

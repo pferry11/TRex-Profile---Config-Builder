@@ -116,9 +116,15 @@
     activate(valid ? startTab : 'stl');
   }
 
+  /* wait for the backend probe (fast: immediate on file://, <=2 s on http)
+   * so backend-dependent buttons render correctly on first paint */
+  function start() {
+    TB.backend.ready.then(boot);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    boot();
+    start();
   }
 })(typeof window !== 'undefined' ? window : globalThis);
