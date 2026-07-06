@@ -124,11 +124,32 @@
     '../avl/delay_dns_0.pcap'
   ];
 
-  TB.ui.ensurePcapDatalist = function () {
-    if (document.getElementById('avl-pcaps')) { return; }
-    var dl = TB.ui.el('datalist', { id: 'avl-pcaps' });
-    AVL_PCAPS.forEach(function (p) { dl.appendChild(TB.ui.el('option', { value: p })); });
+  var CAP2_PCAPS = [
+    'cap2/dns.pcap',
+    'cap2/http_get.pcap',
+    'cap2/http_post.pcap',
+    'cap2/https.pcap',
+    'cap2/exchange.pcap',
+    'cap2/smtp.pcap',
+    'cap2/mail_pop.pcap',
+    'cap2/oracle.pcap',
+    'cap2/citrix.pcap',
+    'cap2/rtsp_short.pcap'
+  ];
+
+  TB.ui.ensureDatalist = function (id, values) {
+    if (document.getElementById(id)) { return; }
+    var dl = TB.ui.el('datalist', { id: id });
+    values.forEach(function (p) { dl.appendChild(TB.ui.el('option', { value: p })); });
     document.body.appendChild(dl);
+  };
+
+  TB.ui.ensurePcapDatalist = function () {
+    TB.ui.ensureDatalist('avl-pcaps', AVL_PCAPS);
+  };
+
+  TB.ui.ensureCap2Datalist = function () {
+    TB.ui.ensureDatalist('cap2-pcaps', CAP2_PCAPS.concat(AVL_PCAPS.map(function (p) { return p.replace('../', ''); })));
   };
 
   var toastTimer = null;

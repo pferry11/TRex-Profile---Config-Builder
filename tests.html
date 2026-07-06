@@ -30,6 +30,7 @@
 <script src="js/gen/scenarios.js"></script>
 <script src="js/gen/cfg.js"></script>
 <script src="js/gen/cli.js"></script>
+<script src="js/gen/cap2.js"></script>
 
 <script>
 'use strict';
@@ -652,6 +653,113 @@ test('scenario B: validation rejects non-increasing stages', function () {
     mechanism: 'm_step', traffic: 'http' });
   var ok = !r.ok && r.errors.some(function (e) { return e.indexOf('low < mid < high') !== -1; });
   return { pass: ok, detail: ok ? '' : JSON.stringify(r.errors || 'ok=true') };
+});
+
+/* ================= cap2 (legacy STF) suite ================= */
+var c2gen = TB.gen.resolve('3.06', 'cap2');
+
+function cap2Model(name, over) {
+  var m = { kind: 'cap2', schemaVersion: 1, trexVersion: '3.06',
+    meta: { name: name, description: '', modified: '' },
+    duration: 10.0,
+    generator: { distribution: 'seq', clientsStart: '16.0.0.1', clientsEnd: '16.0.1.255',
+                 serversStart: '48.0.0.1', serversEnd: '48.0.0.255',
+                 clientsPerGb: 201, minClients: 101, dualPortMask: '1.0.0.0', tcpAging: 1, udpAging: 1 },
+    flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
+             vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null },
+    capInfo: [{ name: 'cap2/dns.pcap', cps: 1.0, ipg: 10000, rtt: 10000, w: 1,
+                limit: null, plugin_id: null, dynPyload: null }] };
+  for (var k in over) { if (Object.prototype.hasOwnProperty.call(over, k)) { m[k] = over[k]; } }
+  return m;
+}
+
+var goldenCap2Dns =
+'# -----------------------------------------------------------------------------\n' +
+'# TRex Profile & Config Builder - cap2 legacy STF profile\n' +
+'# Generated: 2026-07-06   Target: TRex v3.06\n' +
+'# Run: ./t-rex-64 -f dns_like.yaml -d 10 --cfg /etc/trex_cfg.yaml\n' +
+'# Re-edit: load dns_like.trexb.json in TRex Profile & Config Builder\n' +
+'# -----------------------------------------------------------------------------\n' +
+'- duration : 10.0\n' +
+'  generator :\n' +
+'          distribution   : "seq"\n' +
+'          clients_start  : "16.0.0.1"\n' +
+'          clients_end    : "16.0.1.255"\n' +
+'          servers_start  : "48.0.0.1"\n' +
+'          servers_end    : "48.0.0.255"\n' +
+'          clients_per_gb : 201\n' +
+'          min_clients    : 101\n' +
+'          dual_port_mask : "1.0.0.0"\n' +
+'          tcp_aging      : 1\n' +
+'          udp_aging      : 1\n' +
+'  cap_info :\n' +
+'     - name: cap2/dns.pcap\n' +
+'       cps : 1\n' +
+'       ipg : 10000\n' +
+'       rtt : 10000\n' +
+'       w   : 1\n';
+
+test('cap2 golden: dns.yaml-like profile', function () {
+  var r = c2gen(cap2Model('dns_like'), NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  if (r.files[0].name !== 'dns_like.yaml') { return { pass: false, detail: 'file: ' + r.files[0].name }; }
+  return r.files[0].content === goldenCap2Dns ? { pass: true }
+    : { pass: false, detail: firstDiff(goldenCap2Dns, r.files[0].content) };
+});
+
+test('cap2: dyn_pyload + global flags (dyn_pyld1-like)', function () {
+  var m = cap2Model('dyn_like');
+  m.flags.capIpg = true;
+  m.flags.vlan = { enabled: true, vlan0: 100, vlan1: 200 };
+  m.flags.macOverrideByIp = 2;
+  m.capInfo[0].limit = 20;
+  m.capInfo[0].dynPyload = [{ pktId: 1, pyldOffset: 16, type: 0, len: 4, mask: '0xffffffff' }];
+  var r = c2gen(m, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  var c = r.files[0].content;
+  var need = ['  cap_ipg : true', '  vlan : { enable : 1, vlan0 : 100, vlan1 : 200 }',
+    '  mac_override_by_ip : 2', '       limit : 20', '       dyn_pyload :',
+    '            - pkt_id : 1', '              pyld_offset : 16', '              type : 0',
+    '              len : 4', '              mask : 0xffffffff'];
+  for (var i = 0; i < need.length; i++) {
+    if (c.indexOf(need[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(need[i]) }; }
+  }
+  return { pass: true };
+});
+
+test('cap2 structure: leading dash + single-element list shape', function () {
+  var c = c2gen(cap2Model('shape'), NOW).files[0].content;
+  var lines = c.split('\n').filter(function (l) { return l !== '' && l.indexOf('#') !== 0; });
+  if (lines[0].indexOf('- ') !== 0) { return { pass: false, detail: 'first key line: ' + TB.util.escapeHtml(lines[0]) }; }
+  for (var i = 1; i < lines.length; i++) {
+    if (lines[i].indexOf('  ') !== 0) {
+      return { pass: false, detail: 'line not indented under the list item: ' + TB.util.escapeHtml(lines[i]) };
+    }
+  }
+  return { pass: true };
+});
+
+test('cap2 warnings: bad cps, overlapping ranges, plugin hint, dyn_pyload checks', function () {
+  var fails = [];
+  var m = cap2Model('w1'); m.capInfo[0].cps = 0;
+  if (!c2gen(m).warnings.some(function (x) { return x.indexOf('cps must be greater than 0') !== -1; })) { fails.push('cps'); }
+  m = cap2Model('w2'); m.generator.serversStart = '16.0.1.0'; m.generator.serversEnd = '16.0.2.0';
+  if (!c2gen(m).warnings.some(function (x) { return x.indexOf('ranges overlap') !== -1; })) { fails.push('overlap'); }
+  m = cap2Model('w3'); m.capInfo[0].plugin_id = 4;
+  if (!c2gen(m).warnings.some(function (x) { return x.indexOf('HTTP plugin') !== -1; })) { fails.push('plugin'); }
+  m = cap2Model('w4'); m.capInfo[0].dynPyload = [{ pktId: 1, pyldOffset: 9999, type: 2, len: 4, mask: '0xff' }];
+  var w = c2gen(m).warnings;
+  if (!w.some(function (x) { return x.indexOf('beyond a typical payload') !== -1; }) ||
+      !w.some(function (x) { return x.indexOf('type must be 0') !== -1; })) { fails.push('dyn'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('cap2 round-trip: model -> JSON -> parse -> regenerate identical', function () {
+  var m = cap2Model('rt');
+  m.capInfo[0].dynPyload = [{ pktId: 1, pyldOffset: 16, type: 0, len: 4, mask: '0xffffffff' }];
+  var once = c2gen(m, NOW).files[0].content;
+  var twice = c2gen(JSON.parse(JSON.stringify(m)), NOW).files[0].content;
+  return { pass: once === twice, detail: once === twice ? '' : firstDiff(once, twice) };
 });
 
 /* ================= trex_cfg.yaml suite ================= */

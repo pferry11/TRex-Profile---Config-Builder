@@ -1,0 +1,308 @@
+/* TRex Profile & Config Builder - cap2 (legacy STF) profile builder tab.
+ * Pcap-replay YAML profiles: generator IP ranges, global replay flags,
+ * cap_info entries with optional dyn_pyload payload manipulation. */
+(function (root) {
+  'use strict';
+  var TB = root.TB = root.TB || {};
+  TB.ui = TB.ui || {};
+
+  function defaultCap() {
+    return { name: 'cap2/dns.pcap', cps: 1.0, ipg: 10000, rtt: 10000, w: 1,
+             limit: null, plugin_id: null, dynPyload: null };
+  }
+
+  function defaultModel() {
+    return {
+      kind: 'cap2',
+      schemaVersion: 1,
+      trexVersion: TB.settings.get().defaults.trexVersion,
+      meta: { name: 'my_stf_profile', description: '', modified: '' },
+      duration: 10.0,
+      generator: { distribution: 'seq', clientsStart: '16.0.0.1', clientsEnd: '16.0.1.255',
+                   serversStart: '48.0.0.1', serversEnd: '48.0.0.255',
+                   clientsPerGb: 201, minClients: 101, dualPortMask: '1.0.0.0', tcpAging: 1, udpAging: 1 },
+      flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
+               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null },
+      capInfo: [defaultCap()]
+    };
+  }
+
+  TB.ui.cap2Builder = {
+    mount: function (container) {
+      var el = TB.ui.el;
+      var field = TB.ui.field;
+
+      var model = defaultModel();
+      var selectedIdx = 0;
+      var regenTimer = null;
+
+      TB.ui.ensureCap2Datalist();
+
+      var topbar = el('div', { class: 'builder-topbar' });
+      var listPane = el('div', { class: 'pane pane-list' });
+      var editorPane = el('div', { class: 'pane pane-editor' });
+      var outputPane = el('div', { class: 'pane pane-output' });
+      container.appendChild(topbar);
+      container.appendChild(el('div', { class: 'builder-panes' }, [listPane, editorPane, outputPane]));
+
+      function regen() {
+        if (regenTimer) { clearTimeout(regenTimer); }
+        regenTimer = setTimeout(function () {
+          var gen = TB.gen.resolve(model.trexVersion, 'cap2');
+          if (!gen) {
+            outputPane.innerHTML = '';
+            outputPane.appendChild(el('div', { class: 'output-empty',
+              text: 'No cap2 generator registered for TRex v' + model.trexVersion + '.' }));
+            return;
+          }
+          TB.ui.output.render(outputPane, { result: gen(model), model: model });
+        }, 120);
+      }
+
+      /* ---------- top bar (same pattern as the other builders) ---------- */
+      function renderTopbar() {
+        topbar.innerHTML = '';
+        topbar.appendChild(field({ label: 'Profile name', type: 'text', value: model.meta.name, width: '160px',
+          onChange: function (v) { model.meta.name = v || 'stf_profile'; regen(); } }));
+        topbar.appendChild(field({ label: 'Duration (sec)', type: 'float', value: model.duration, width: '80px',
+          onChange: function (v) { model.duration = v === null ? 10 : v; regen(); } }));
+        topbar.appendChild(field({ label: 'TRex version', type: 'select', value: model.trexVersion,
+          options: TB.gen.versions().map(function (v) { return { value: v, label: 'v' + v }; }),
+          onChange: function (v) { model.trexVersion = v; regen(); } }));
+
+        var actions = el('div', { class: 'topbar-actions' });
+        actions.appendChild(el('button', { class: 'btn', text: 'New',
+          onclick: function () {
+            if (!confirm('Start a new profile? Unsaved changes are lost.')) { return; }
+            model = defaultModel(); selectedIdx = 0; renderAll();
+          } }));
+        actions.appendChild(el('button', { class: 'btn', text: 'Save',
+          onclick: function () {
+            model.meta.modified = new Date().toISOString();
+            var r = TB.persist.saveProfile(TB.util.deepClone(model));
+            TB.ui.toast(r.ok ? 'Saved "' + model.meta.name + '"' : r.error, r.ok ? 'ok' : 'err');
+            renderTopbar();
+          } }));
+        var savedSel = el('select', { class: 'saved-select' });
+        savedSel.appendChild(el('option', { value: '', text: 'Saved profiles…' }));
+        TB.persist.listProfiles('cap2').forEach(function (m) {
+          savedSel.appendChild(el('option', { value: m.meta.name, text: m.meta.name }));
+        });
+        actions.appendChild(savedSel);
+        actions.appendChild(el('button', { class: 'btn', text: 'Load',
+          onclick: function () {
+            if (!savedSel.value) { return; }
+            loadModel(TB.persist.getProfile('cap2', savedSel.value));
+          } }));
+        actions.appendChild(el('button', { class: 'btn btn-secondary', text: 'Delete',
+          onclick: function () {
+            if (!savedSel.value || !confirm('Delete saved profile "' + savedSel.value + '"?')) { return; }
+            TB.persist.deleteProfile('cap2', savedSel.value);
+            renderTopbar();
+          } }));
+        var fileInput = el('input', { type: 'file', accept: '.json' });
+        fileInput.style.display = 'none';
+        fileInput.addEventListener('change', function () {
+          var f = fileInput.files[0];
+          if (!f) { return; }
+          var reader = new FileReader();
+          reader.onload = function () {
+            try { loadModel(JSON.parse(reader.result)); }
+            catch (e) { TB.ui.toast('Not valid JSON: ' + e.message, 'err'); }
+          };
+          reader.readAsText(f);
+        });
+        actions.appendChild(fileInput);
+        actions.appendChild(el('button', { class: 'btn btn-secondary', text: 'Import model',
+          onclick: function () { fileInput.click(); } }));
+        topbar.appendChild(actions);
+      }
+
+      function loadModel(m) {
+        if (!m) { TB.ui.toast('Profile not found', 'err'); return; }
+        if (m.kind !== 'cap2') { TB.ui.toast('Not a cap2 model (kind=' + m.kind + ')', 'err'); return; }
+        if (m.schemaVersion > 1) {
+          TB.ui.toast('Model schemaVersion ' + m.schemaVersion + ' is newer than this app supports (1).', 'err');
+          return;
+        }
+        model = TB.util.deepClone(m);
+        selectedIdx = 0;
+        renderAll();
+      }
+
+      /* ---------- left: cap_info list ---------- */
+      function renderList() {
+        listPane.innerHTML = '';
+        listPane.appendChild(el('div', { class: 'pane-title', text: 'Pcap templates' }));
+        model.capInfo.forEach(function (c, idx) {
+          var row = el('div', {
+            class: 'stream-item' + (idx === selectedIdx ? ' active' : ''),
+            onclick: function () { selectedIdx = idx; renderList(); renderEditor(); }
+          });
+          row.appendChild(el('div', { class: 'stream-name' }, [
+            el('div', { text: (c.name || '?').split('/').pop() }),
+            el('small', { text: 'cps ' + c.cps + (c.dynPyload && c.dynPyload.length ? ' · dyn_pyload' : '') })
+          ]));
+          var btns = el('div', { class: 'stream-btns' });
+          btns.appendChild(el('button', { class: 'btn btn-small', text: '⧉', title: 'duplicate',
+            onclick: function (e) {
+              e.stopPropagation();
+              model.capInfo.splice(idx + 1, 0, TB.util.deepClone(c));
+              selectedIdx = idx + 1;
+              renderList(); renderEditor(); regen();
+            } }));
+          btns.appendChild(el('button', { class: 'btn btn-small', text: '✕', title: 'delete',
+            onclick: function (e) {
+              e.stopPropagation();
+              if (!confirm('Delete this pcap template?')) { return; }
+              model.capInfo.splice(idx, 1);
+              if (selectedIdx >= model.capInfo.length) { selectedIdx = Math.max(0, model.capInfo.length - 1); }
+              renderList(); renderEditor(); regen();
+            } }));
+          row.appendChild(btns);
+          listPane.appendChild(row);
+        });
+        listPane.appendChild(el('button', { class: 'btn', text: '+ Add pcap template',
+          onclick: function () {
+            model.capInfo.push(defaultCap());
+            selectedIdx = model.capInfo.length - 1;
+            renderList(); renderEditor(); regen();
+          } }));
+      }
+
+      /* ---------- center: generator + flags + selected cap ---------- */
+      function generatorSection() {
+        var g = model.generator;
+        var box = el('div', {});
+        var r1 = el('div', { class: 'field-row' });
+        r1.appendChild(field({ label: 'Distribution', type: 'select', value: g.distribution,
+          options: [{ value: 'seq' }, { value: 'rand' }],
+          onChange: function (v) { g.distribution = v; regen(); } }));
+        [['clientsStart', 'Clients start'], ['clientsEnd', 'Clients end'],
+         ['serversStart', 'Servers start'], ['serversEnd', 'Servers end']].forEach(function (p) {
+          r1.appendChild(field({ label: p[1], type: 'text', value: g[p[0]], width: '105px',
+            validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+            onChange: function (v) { g[p[0]] = v || ''; regen(); } }));
+        });
+        box.appendChild(r1);
+        var r2 = el('div', { class: 'field-row' });
+        r2.appendChild(field({ label: 'clients_per_gb', type: 'int', value: g.clientsPerGb, width: '80px',
+          onChange: function (v) { g.clientsPerGb = v; regen(); } }));
+        r2.appendChild(field({ label: 'min_clients', type: 'int', value: g.minClients, width: '80px',
+          onChange: function (v) { g.minClients = v; regen(); } }));
+        r2.appendChild(field({ label: 'dual_port_mask', type: 'text', value: g.dualPortMask, width: '90px',
+          hint: 'IP offset added on the second port pair',
+          onChange: function (v) { g.dualPortMask = v; regen(); } }));
+        r2.appendChild(field({ label: 'tcp_aging (s)', type: 'int', value: g.tcpAging, width: '70px',
+          onChange: function (v) { g.tcpAging = v; regen(); } }));
+        r2.appendChild(field({ label: 'udp_aging (s)', type: 'int', value: g.udpAging, width: '70px',
+          onChange: function (v) { g.udpAging = v; regen(); } }));
+        box.appendChild(r2);
+        return box;
+      }
+
+      function flagsSection() {
+        var f = model.flags;
+        var box = el('div', {});
+        var r1 = el('div', { class: 'field-row' });
+        r1.appendChild(field({ label: "cap_ipg (use pcap's real inter-packet gaps)", type: 'checkbox',
+          value: f.capIpg === true,
+          onChange: function (v) { f.capIpg = v ? true : null; regen(); } }));
+        r1.appendChild(field({ label: 'cap_override_ipg (µs)', type: 'int', value: f.capOverrideIpg, width: '90px',
+          onChange: function (v) { f.capOverrideIpg = v; regen(); } }));
+        r1.appendChild(field({ label: 'cap_ipg_min (µs)', type: 'int', value: f.capIpgMin, width: '90px',
+          onChange: function (v) { f.capIpgMin = v; regen(); } }));
+        r1.appendChild(field({ label: 'mac_override_by_ip', type: 'int', value: f.macOverrideByIp, width: '70px',
+          onChange: function (v) { f.macOverrideByIp = v; regen(); } }));
+        box.appendChild(r1);
+        var r2 = el('div', { class: 'field-row' });
+        r2.appendChild(field({ label: 'VLAN load balance', type: 'checkbox', value: f.vlan.enabled,
+          onChange: function (v) { f.vlan.enabled = v; renderEditor(); regen(); } }));
+        if (f.vlan.enabled) {
+          r2.appendChild(field({ label: 'vlan0', type: 'int', value: f.vlan.vlan0, width: '65px',
+            onChange: function (v) { f.vlan.vlan0 = v === null ? 100 : v; regen(); } }));
+          r2.appendChild(field({ label: 'vlan1', type: 'int', value: f.vlan.vlan1, width: '65px',
+            onChange: function (v) { f.vlan.vlan1 = v === null ? 200 : v; regen(); } }));
+        }
+        box.appendChild(r2);
+        return box;
+      }
+
+      function capEditor(c) {
+        var box = el('div', {});
+        var r1 = el('div', { class: 'field-row' });
+        r1.appendChild(field({ label: 'Pcap path (relative to the TRex dir)', type: 'text', value: c.name,
+          width: '230px', datalist: 'cap2-pcaps',
+          onChange: function (v) { c.name = v || ''; renderList(); regen(); } }));
+        r1.appendChild(field({ label: 'cps', type: 'float', value: c.cps, width: '70px',
+          onChange: function (v) { c.cps = v === null ? 1 : v; renderList(); regen(); } }));
+        r1.appendChild(field({ label: 'ipg (µs)', type: 'int', value: c.ipg, width: '80px',
+          onChange: function (v) { c.ipg = v === null ? 10000 : v; regen(); } }));
+        r1.appendChild(field({ label: 'rtt (µs)', type: 'int', value: c.rtt, width: '80px',
+          onChange: function (v) { c.rtt = v === null ? 10000 : v; regen(); } }));
+        r1.appendChild(field({ label: 'w (weight)', type: 'int', value: c.w, width: '60px',
+          onChange: function (v) { c.w = v === null ? 1 : v; regen(); } }));
+        box.appendChild(r1);
+        var r2 = el('div', { class: 'field-row' });
+        r2.appendChild(field({ label: 'limit (max active flows, opt.)', type: 'int', value: c.limit, width: '90px',
+          onChange: function (v) { c.limit = v; regen(); } }));
+        r2.appendChild(field({ label: 'plugin_id', type: 'select',
+          value: c.plugin_id === null || c.plugin_id === undefined ? '' : String(c.plugin_id),
+          options: [{ value: '', label: '(none)' }, { value: '4', label: '4 - HTTP' }, { value: '5', label: '5 - DHCP' }],
+          onChange: function (v) { c.plugin_id = v === '' ? null : parseInt(v, 10); regen(); } }));
+        box.appendChild(r2);
+
+        /* dyn_pyload editor */
+        var dynBox = el('div', {});
+        (c.dynPyload || []).forEach(function (d, i) {
+          var dr = el('div', { class: 'vm-var-row' });
+          dr.appendChild(field({ label: 'pkt_id', type: 'int', value: d.pktId, width: '55px',
+            onChange: function (v) { d.pktId = v === null ? 1 : v; regen(); } }));
+          dr.appendChild(field({ label: 'pyld_offset', type: 'int', value: d.pyldOffset, width: '75px',
+            onChange: function (v) { d.pyldOffset = v === null ? 0 : v; regen(); } }));
+          dr.appendChild(field({ label: 'type', type: 'select', value: String(d.type),
+            options: [{ value: '0', label: '0 - random' }, { value: '1', label: '1 - client_ip' }],
+            onChange: function (v) { d.type = parseInt(v, 10); regen(); } }));
+          dr.appendChild(field({ label: 'len (uint32s)', type: 'int', value: d.len, width: '70px',
+            onChange: function (v) { d.len = v === null ? 1 : v; regen(); } }));
+          dr.appendChild(field({ label: 'mask (hex)', type: 'text', value: d.mask, width: '95px',
+            validate: function (v) { return /^0x[0-9a-fA-F]+$/.test(v) ? null : 'expect hex like 0xffffffff'; },
+            onChange: function (v) { d.mask = v || '0xffffffff'; regen(); } }));
+          dr.appendChild(el('button', { class: 'btn btn-small btn-danger', text: '✕',
+            onclick: function () { c.dynPyload.splice(i, 1); renderEditor(); regen(); } }));
+          dynBox.appendChild(dr);
+        });
+        dynBox.appendChild(el('button', { class: 'btn btn-small', text: '+ Add payload rewrite rule',
+          onclick: function () {
+            c.dynPyload = c.dynPyload || [];
+            c.dynPyload.push({ pktId: 1, pyldOffset: 16, type: 0, len: 4, mask: '0xffffffff' });
+            renderEditor(); regen();
+          } }));
+        box.appendChild(TB.ui.section('dyn_pyload - rewrite payload bytes per packet (pcap manipulation)',
+          dynBox, !!(c.dynPyload && c.dynPyload.length)));
+        return box;
+      }
+
+      function renderEditor() {
+        editorPane.innerHTML = '';
+        editorPane.appendChild(el('div', { class: 'pane-title', text: 'Profile' }));
+        editorPane.appendChild(TB.ui.section('Generator (IP ranges & tuple pool)', generatorSection(), true));
+        editorPane.appendChild(TB.ui.section('Global replay flags (cap_ipg / vlan / mac override)', flagsSection(), false));
+        var c = model.capInfo[selectedIdx];
+        if (!c) {
+          editorPane.appendChild(el('div', { class: 'output-empty', text: 'No pcap template selected. Add one on the left.' }));
+          return;
+        }
+        editorPane.appendChild(TB.ui.section('Pcap template: ' + (c.name || '?').split('/').pop(), capEditor(c), true));
+      }
+
+      function renderAll() {
+        renderTopbar();
+        renderList();
+        renderEditor();
+        regen();
+      }
+      renderAll();
+    }
+  };
+})(typeof window !== 'undefined' ? window : globalThis);

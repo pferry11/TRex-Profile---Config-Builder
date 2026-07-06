@@ -6,6 +6,7 @@
   var TABS = [
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },
     { id: 'astf', label: 'ASTF Profile', mount: function (c) { TB.ui.astfBuilder.mount(c); } },
+    { id: 'cap2', label: 'cap2 (STF)', mount: function (c) { TB.ui.cap2Builder.mount(c); } },
     { id: 'scenarios', label: 'Scenarios', mount: function (c) { TB.ui.scenarios.mount(c); } },
     { id: 'cfg', label: 'Platform Config', mount: function (c) { TB.ui.cfgBuilder.mount(c); },
       onShow: function () { TB.ui.cfgBuilder.refresh(); } },
