@@ -215,6 +215,75 @@
         '<p>Then browse to port 8080: pcap Browse… and server-side Validate light up automatically.</p>';
     } },
 
+    { id: 'future', title: 'Future updates', html: function () {
+      var rows = [
+        /* [area, improvement, what it adds, effort] */
+        ['STL builder', 'Rate units beyond pps', 'STLTXCont also accepts bps_L1/bps_L2 and percentage-of-line-rate; a unit selector would match how tests are usually specified.', 'Small'],
+        ['STL builder', 'Pcap replay streams', 'STLProfile.load_pcap(file, ipg_usec, loop_count) - replay a capture as a stateless stream, like the shipped stl/pcap.py.', 'Medium'],
+        ['STL builder', 'Tunnel encapsulations', 'VXLAN, MPLS, GRE, QinQ (stacked VLANs) and NSH header layers - TRex supports them all via scapy.', 'Medium'],
+        ['STL builder', 'More packet presets', 'ICMP echo, ARP, DNS-query payloads, IPv6 extension headers and fragments (see stl/udp_1pkt_dns.py, udp_1pkt_frag.py).', 'Medium'],
+        ['STL builder', 'IMIX preset button', 'One click to load the classic 60/590/1514 three-stream IMIX table.', 'Small'],
+        ['STL builder', 'Richer field engine', 'Dependent variables, write offset fixups, per-core split control (stl/dependent_field_engine_vars.py, split_var_to_cores.py).', 'Medium'],
+        ['ASTF builder', 'HTTPS/TLS traffic', 'In v3.06 via TLS pcaps (avl/delay_10_https_0.pcap preset); newer TRex adds native TLS program support.', 'Medium'],
+        ['ASTF builder', 'L7 protocol presets', 'One-click DNS/SIP/RTP UDP programs and an EMIX/SFR-style multi-pcap enterprise mix preset.', 'Small'],
+        ['ASTF builder', 'Elephant-flow preset', 'Long keep-alive template with looped large sends (astf/http_eflow.py pattern) for throughput soak tests.', 'Small'],
+        ['ASTF builder', 'GTP-U tunnel topology', 'Mobile-network testing via tunnels_topo (astf/gtpu_topo.py): per-connection GTP-U encapsulation with TEID ranges.', 'Large'],
+        ['Scenarios', 'NDR benchmark wizard', 'Drive the shipped ./ndr script: find the no-drop rate automatically instead of manual -m stepping.', 'Medium'],
+        ['Scenarios', 'N-stage ramp', 'Generalise the low/mid/high wizard to any number of stages.', 'Small'],
+        ['Scenarios', 'Bidirectional two-server', 'Both boxes run client AND server roles simultaneously (client masks on both sides).', 'Medium'],
+        ['New domain', 'TRex-EMU profiles', 'Client emulation profiles: ARP, DHCPv4/v6, ICMP, IGMP, IPv6 ND, DNS/mDNS - a whole additional TRex subsystem.', 'Large'],
+        ['New domain', 'TPG configuration', 'Tagged Packet Group setup (tpg_tags_conf.json) for per-tag rx stats on DOT1Q/QinQ.', 'Medium'],
+        ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large'],
+        ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small'],
+        ['App platform', 'Live TRex control', 'Extend the Flask backend to the TRex automation API: push a profile, start/stop, live stats - the app becomes a controller, not just a generator.', 'Large'],
+        ['App platform', 'Import existing .py profiles', 'Parse shipped/hand-written profiles back into editable models. Python parsing in JS is genuinely hard - realistic only for app-generated files.', 'Large'],
+        ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small'],
+        ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium'],
+        ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small']
+      ];
+      return '<p>Candidate improvements, mapped against the full TRex feature set ' +
+        '(trex-tgn.cisco.com). None are required for day-to-day use - the current app covers STL, ASTF, cap2, ' +
+        'platform config, CLI and the two key scenarios end to end.</p>' +
+        '<table class="man-table"><tr><th>Area</th><th>Improvement</th><th>What it adds</th><th>Effort</th></tr>' +
+        rows.map(function (r) {
+          return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>';
+        }).join('') + '</table>' +
+
+        '<h4>How to add support for a new TRex version (3.07, 3.08, …)</h4>' +
+        '<p>The app was built version-aware from day one: every saved model carries its <code>trexVersion</code>, ' +
+        'and all code generation goes through a per-version registry. Adding a version never requires touching the ' +
+        'UI or migrating saved profiles.</p>' +
+        '<ol>' +
+        '<li><strong>Diff the example trees.</strong> Unpack the new TRex release and compare its <code>stl/</code>, ' +
+        '<code>astf/</code> and <code>cfg/</code> examples against v3.06 to spot API changes (new kwargs, renamed ' +
+        'fields, new CLI flags).</li>' +
+        '<li><strong>Register a generator set</strong> in a new file (e.g. <code>js/gen/v307.js</code>), delegating ' +
+        'everything unchanged to 3.06 and overriding only the deltas:</li></ol>' +
+        '<pre class="code">var base = TB.gen.registry[\'3.06\'];\n' +
+        'TB.gen.registry[\'3.07\'] = {\n' +
+        '  stl: base.stl,                      // unchanged - reuse\n' +
+        '  astf: function (model, opts) {      // changed - wrap or rewrite\n' +
+        '    var r = base.astf(model, opts);\n' +
+        '    /* apply 3.07-specific tweaks to r.files[0].content */\n' +
+        '    return r;\n' +
+        '  },\n' +
+        '  cfg: base.cfg, cli: base.cli, cap2: base.cap2,\n' +
+        '  summarize: base.summarize           // reuse or override phrasing\n' +
+        '};</pre>' +
+        '<ol start="3">' +
+        '<li><strong>Load the file</strong> with a <code>&lt;script&gt;</code> tag in <code>index.html</code> and ' +
+        '<code>tests.html</code> (after <code>js/gen/registry.js</code>). The version dropdowns list registry keys ' +
+        'automatically - "v3.07" appears everywhere at once.</li>' +
+        '<li><strong>Add per-version goldens</strong>: copy a handful of the new release\'s shipped examples as ' +
+        'fixtures in <code>tests.html</code> and assert the 3.07 generators reproduce them.</li>' +
+        '<li><strong>Validate on the box</strong> with the new release\'s <code>stl-sim</code>/<code>astf-sim</code>, ' +
+        'and flip the default version in Settings when ready. Old profiles keep generating with their saved version ' +
+        'until you switch them.</li></ol>' +
+        '<p class="man-note">Rule of thumb: version-specific knowledge lives ONLY in <code>js/gen/*</code>. If adding ' +
+        'a version tempts you to edit a UI file, add the capability to the model instead and let each version\'s ' +
+        'generator decide what to emit.</p>';
+    } },
+
     { id: 'glossary', title: 'Glossary', html: function () {
       var terms = [
         ['cps', 'Connections per second. In ASTF/cap2 profiles it is the rate contributed at -m 1.'],
