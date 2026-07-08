@@ -26,6 +26,7 @@
 <script src="js/core/backend.js"></script>
 <script src="js/gen/registry.js"></script>
 <script src="js/gen/py.js"></script>
+<script src="js/gen/summarize.js"></script>
 <script src="js/gen/stl.js"></script>
 <script src="js/gen/astf.js"></script>
 <script src="js/gen/scenarios.js"></script>
@@ -106,17 +107,44 @@ var fxLatency = (function () {
 })();
 
 /* ---------------- goldens (verified via Node + python compile) ---------------- */
-var HDR = function (name) {
+function summaryBlock(sentences) {
+  if (!sentences || !sentences.length) { return ''; }
+  return '# Summary:\n' + sentences.map(function (l) { return '#   ' + l + '\n'; }).join('');
+}
+
+var HDR = function (name, summary) {
   return '# -----------------------------------------------------------------------------\n' +
     '# TRex Profile & Config Builder - STL profile\n' +
     '# Generated: 2026-07-06\n' +
     '# Target: TRex v3.06\n' +
     '# Validate on the TRex box: ./stl-sim -f ' + name + '.py -o /tmp/out.pcap -l 50\n' +
     '# Re-edit: load ' + name + '.trexb.json in TRex Profile & Config Builder\n' +
+    summaryBlock(summary) +
     '# -----------------------------------------------------------------------------\n';
 };
 
-var goldenMinimal = HDR('udp_simple') +
+var sumMinimal = [
+  'S0: transmits continuously at 100 pps - UDP frames sized by --size 16.0.0.1 -> 48.0.0.1.',
+  'Aggregate self-starting continuous rate: 100 pps at -m 1.',
+  'Tunables: --size.'
+];
+var sumImix = [
+  'S0: transmits continuously at 28 pps - 60-byte UDP frames 16.0.0.1 -> 48.0.0.1; sweeps IP.src over 16.0.0.1-16.0.0.254; sweeps IP.dst over 48.0.0.1-48.0.0.254.',
+  'S1: transmits continuously at 16 pps - 590-byte UDP frames 16.0.0.1 -> 48.0.0.1; sweeps IP.src over 16.0.0.1-16.0.0.254; sweeps IP.dst over 48.0.0.1-48.0.0.254; starts 0.1 usec in.',
+  'S2: transmits continuously at 4 pps - 1514-byte UDP frames 16.0.0.1 -> 48.0.0.1; sweeps IP.src over 16.0.0.1-16.0.0.254; sweeps IP.dst over 48.0.0.1-48.0.0.254; starts 0.2 usec in.',
+  'Aggregate self-starting continuous rate: 48 pps at -m 1.'
+];
+var sumChained = [
+  'S0: sends a single burst of 1000 packets at 10 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1; starts 10 usec in; then triggers S1.',
+  'S1: sends 5 bursts of 4 packets at 1000 pps (gap 1000000 usec) - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1; waits to be triggered.'
+];
+var sumLatency = [
+  'S0: transmits continuously at 1000 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1; latency measured on pg_id 5 + port_id.',
+  'Aggregate self-starting continuous rate: 1000 pps at -m 1.',
+  'Latency streams keep their fixed pps and ignore the -m multiplier.'
+];
+
+var goldenMinimal = HDR('udp_simple', sumMinimal) +
 'from trex_stl_lib.api import *\n' +
 'import argparse\n' +
 '\n\n' +
@@ -156,7 +184,7 @@ function imixStream(n, name, size, pps, isg) {
 '            mode=STLTXCont(pps=' + pps + ')' + (isg ? ',\n            isg=' + isg + ')' : ')') + '\n';
 }
 
-var goldenImix = HDR('imix_like') +
+var goldenImix = HDR('imix_like', sumImix) +
 'from trex_stl_lib.api import *\n' +
 'import argparse\n' +
 '\n\n' +
@@ -178,7 +206,7 @@ imixStream(3, 'S2', 1514, 4, 0.2) +
 'def register():\n' +
 '    return STLGenProfile()\n';
 
-var goldenChained = HDR('burst_chain') +
+var goldenChained = HDR('burst_chain', sumChained) +
 'from trex_stl_lib.api import *\n' +
 'import argparse\n' +
 '\n\n' +
@@ -215,7 +243,7 @@ var goldenChained = HDR('burst_chain') +
 'def register():\n' +
 '    return STLGenProfile()\n';
 
-var goldenLatency = HDR('latency_stream') +
+var goldenLatency = HDR('latency_stream', sumLatency) +
 'from trex_stl_lib.api import *\n' +
 'import argparse\n' +
 '\n\n' +
@@ -434,15 +462,23 @@ var fxAstfLoop = astfModel('http_loop', { mode: 'program', templates: [httpTempl
   ] }
 })]});
 
-var AHDR = function (name) {
+var AHDR = function (name, summary) {
   return '# -----------------------------------------------------------------------------\n' +
     '# TRex Profile & Config Builder - ASTF profile\n' +
     '# Generated: 2026-07-06\n' +
     '# Target: TRex v3.06\n' +
     '# Validate on the TRex box: ./astf-sim -f ' + name + '.py --full -o /tmp/\n' +
     '# Re-edit: load ' + name + '.trexb.json in TRex Profile & Config Builder\n' +
+    summaryBlock(summary) +
     '# -----------------------------------------------------------------------------\n';
 };
+
+var sumAstfHttp = [
+  'Replays 1 pcap template; clients 16.0.0.0-16.0.0.255 talk to servers 48.0.0.0-48.0.255.255.',
+  'delay_10_http_browsing_0.pcap: 2.776 connections/s at -m 1.',
+  'Total offered load: 2.776 connections/s at -m 1.'
+];
+var sumAstfRampup = sumAstfHttp.concat(['CPS ramps linearly to the full rate over 5 s (client side).']);
 
 var astfCommon =
 'from trex.astf.api import *\n' +
@@ -467,14 +503,14 @@ var astfFooter =
 'def register():\n' +
 '    return ASTFGenProfile()\n';
 
-var goldenAstfHttp = AHDR('http_simple_like') + astfCommon +
+var goldenAstfHttp = AHDR('http_simple_like', sumAstfHttp) + astfCommon +
 '\n' +
 '        return ASTFProfile(default_ip_gen=ip_gen,\n' +
 '                           cap_list=[\n' +
 '                               ASTFCapInfo(file="../avl/delay_10_http_browsing_0.pcap", cps=2.776)\n' +
 '                           ])' + astfFooter;
 
-var goldenAstfRampup = AHDR('rampup_like') + astfCommon +
+var goldenAstfRampup = AHDR('rampup_like', sumAstfRampup) + astfCommon +
 '\n' +
 '        c_glob_info = ASTFGlobalInfo()\n' +
 '        c_glob_info.scheduler.rampup_sec = 5\n' +
@@ -689,6 +725,10 @@ var goldenCap2Dns =
 '# Generated: 2026-07-06   Target: TRex v3.06\n' +
 '# Run: ./t-rex-64 -f dns_like.yaml -d 10 --cfg /etc/trex_cfg.yaml\n' +
 '# Re-edit: load dns_like.trexb.json in TRex Profile & Config Builder\n' +
+summaryBlock([
+  'Legacy STF replay for 10 s; clients 16.0.0.1-16.0.1.255 talk to servers 48.0.0.1-48.0.0.255 (seq).',
+  'dns.pcap: 1 flows/s, ipg 10000 usec, rtt 10000 usec, weight 1.'
+]) +
 '# -----------------------------------------------------------------------------\n' +
 '- duration : 10.0\n' +
 '  generator :\n' +
@@ -805,17 +845,30 @@ function srvBig() {
     limitMemory: null, prefix: null, enableZmqPub: null, telnetPort: null };
 }
 
-var CFGHDR = function (serverLine) {
+var CFGHDR = function (serverLine, summary) {
   return '# -----------------------------------------------------------------------------\n' +
     '# TRex Profile & Config Builder - platform config (trex_cfg.yaml)\n' +
     '# Generated: 2026-07-06   Target: TRex v3.06\n' +
     '# Server: ' + serverLine + '\n' +
     '# Install as /etc/trex_cfg.yaml (or pass --cfg <path> to t-rex-64)\n' +
     '# Find PCI addresses with: ./dpdk_setup_ports.py -s\n' +
+    summaryBlock(summary) +
     '# -----------------------------------------------------------------------------\n';
 };
 
-var goldenCfgIp = CFGHDR('simple') +
+var sumCfgIp = [
+  '2-port platform config on PCI 03:00.0, 03:00.1.',
+  'Port 0: L3 mode, ip 1.1.1.1 via gateway 2.2.2.2.',
+  'Port 1: L3 mode, ip 2.2.2.2 via gateway 1.1.1.1.'
+];
+var sumCfgMac = [
+  '2-port platform config on PCI 08:00.0, 08:00.1; 4 cores per dual-interface; 40 Gb ports.',
+  'Port 0: L2 mode, src 00:0c:29:55:37:bd -> dest 00:0c:29:55:37:c7.',
+  'Port 1: L2 mode, src 00:0c:29:55:37:c7 -> dest 00:0c:29:55:37:bd.',
+  'Thread pinning: master 0, latency 5; socket 0 threads [1,2,3,4,6,7].'
+];
+
+var goldenCfgIp = CFGHDR('simple', sumCfgIp) +
 '- version          : 2\n' +
 '  interfaces       : ["03:00.0", "03:00.1"]\n' +
 '  port_limit       : 2\n' +
@@ -825,7 +878,7 @@ var goldenCfgIp = CFGHDR('simple') +
 '      - ip         : 2.2.2.2  # port 1\n' +
 '        default_gw : 1.1.1.1\n';
 
-var goldenCfgMac = CFGHDR('xl710 (10.0.0.11)') +
+var goldenCfgMac = CFGHDR('xl710 (10.0.0.11)', sumCfgMac) +
 '- version          : 2\n' +
 '  interfaces       : ["08:00.0", "08:00.1"]\n' +
 '  port_limit       : 2\n' +
@@ -935,6 +988,47 @@ test('cli console: interactive start lines and server-only note', function () {
   if (!ok) { return { pass: false, detail: 'server-only console should have no start line' }; }
   r = clgen(cliModel({ mode: 'legacy', profile: 'x.yaml', mult: 1 }), NOW);
   return { pass: r.files.length === 1, detail: 'legacy mode should emit only run_*.sh' };
+});
+
+/* ================= summary suite ================= */
+
+test('summary: CLI restated in English', function () {
+  var s = TB.gen.summary(cliModel({ astfClientMask: '0x1' }));
+  var ok = s.length === 2 &&
+    s[0] === 'Starts TRex interactively in ASTF mode with 8 cores using /etc/trex_cfg.yaml as the client side on port mask 0x1.' &&
+    s[1] === 'The console then starts two_server.py at -m 2 for 60 s.';
+  return { pass: ok, detail: TB.util.escapeHtml(JSON.stringify(s)) };
+});
+
+test('summary: cap2 dyn_pyload described in words', function () {
+  var m = cap2Model('dynsum');
+  m.capInfo[0].dynPyload = [{ pktId: 1, pyldOffset: 16, type: 1, len: 4, mask: '0xffffffff' }];
+  var s = TB.gen.summary(m).join(' | ');
+  var ok = s.indexOf('rewrites 4 uint32s at payload offset 16 of packet 1 with the client IP (mask 0xffffffff)') !== -1;
+  return { pass: ok, detail: TB.util.escapeHtml(s) };
+});
+
+test('summary: ASTF program template described in words', function () {
+  var s = TB.gen.summary(fxAstfProgram).join(' | ');
+  var ok = s.indexOf('client sends an HTTP request, receives the peer payload') !== -1 &&
+    s.indexOf('server receives the peer payload, sends an HTTP response with a 32768-byte body') !== -1;
+  return { pass: ok, detail: TB.util.escapeHtml(s) };
+});
+
+test('summary: scenario runbooks gain WHAT THE PROFILE DOES section', function () {
+  var r = TB.scenarios.buildRamp({ engine: 'stl', name: 'ramp_sum', low: 100, mid: 500, high: 1000, stageSec: 30, now: '2026-07-06' });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var rb = r.files[1].content;
+  var ok = rb.indexOf('WHAT THE PROFILE DOES') !== -1 &&
+    rb.indexOf('  - S_low: transmits continuously at 100 pps') !== -1;
+  return { pass: ok, detail: TB.util.escapeHtml(rb.slice(rb.indexOf('WHAT'), rb.indexOf('WHAT') + 300)) };
+});
+
+test('summary: unknown kind/version returns empty (no crash)', function () {
+  var ok = TB.gen.summary(null).length === 0 &&
+    TB.gen.summary({ kind: 'mystery' }).length === 0 &&
+    TB.gen.summary({ kind: 'stl', trexVersion: '9.99', streams: [] }).length === 0;
+  return { pass: ok, detail: '' };
 });
 
 test('cli warnings: cfg missing, server-only+mult, stl -l, bad mask, both flags', function () {

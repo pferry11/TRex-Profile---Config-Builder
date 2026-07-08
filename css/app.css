@@ -245,6 +245,43 @@ pre.code {
 .btn-generate { border-color: var(--accent); color: var(--accent); font-weight: 600; margin-top: 6px; }
 .btn-generate:hover { background: var(--accent); color: #fff; }
 
+/* ---------- tooltips ---------- */
+.tip-icon {
+  position: relative;
+  display: inline-block;
+  margin-left: 5px;
+  color: var(--text-dim);
+  cursor: help;
+  font-size: 11px;
+  font-style: normal;
+}
+.tip-icon:hover { color: var(--accent); }
+.tip-icon::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 6px;
+  width: max-content;
+  max-width: 300px;
+  background: #0d1015;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 11px;
+  font: normal 12px/1.45 "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  z-index: 60;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.tip-icon:hover::after { opacity: 1; visibility: visible; }
+
 /* ---------- modal + backend features ---------- */
 .modal-overlay {
   position: fixed;
@@ -283,6 +320,14 @@ pre.code {
 }
 .browse-item:hover { background: var(--bg-hover); color: var(--accent); }
 .validate-area { margin-bottom: 8px; }
+.summary-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.summary-list li { margin-bottom: 2px; }
 .validate-result {
   font-family: var(--mono);
   font-size: 12.5px;
@@ -292,6 +337,76 @@ pre.code {
 }
 .validate-result.ok { border: 1px solid var(--ok); color: var(--ok); }
 .validate-result.err { border: 1px solid var(--err); color: var(--err); }
+
+/* ---------- manual tab ---------- */
+.man-wrap {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 900px);
+  gap: 20px;
+  padding: 16px;
+  height: 100%;
+  overflow: hidden;
+}
+.man-toc {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.man-toc-link {
+  padding: 5px 9px;
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+}
+.man-toc-link:hover { background: var(--bg-hover); color: var(--text); }
+.man-content { overflow-y: auto; padding-right: 12px; }
+.man-chapter { margin-bottom: 34px; }
+.man-chapter h3 {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  color: var(--accent);
+}
+.man-chapter h4 { margin: 16px 0 6px; }
+.man-chapter p, .man-chapter li { font-size: 13.5px; line-height: 1.6; color: var(--text); }
+.man-chapter code {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.man-purpose { font-style: italic; color: var(--text-dim); }
+.man-note {
+  border-left: 3px solid var(--warn);
+  background: rgba(210, 153, 34, 0.08);
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.man-shot {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 8px 0 4px;
+}
+.man-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+  margin-top: 6px;
+}
+.man-table th, .man-table td {
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+.man-table th { background: var(--bg-pane); }
+.man-table td:first-child { white-space: nowrap; color: var(--accent); font-family: var(--mono); font-size: 12px; }
 
 /* ---------- toast ---------- */
 #toast {

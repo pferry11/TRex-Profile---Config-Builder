@@ -35,7 +35,7 @@
     }
 
     var bar = el('div', { class: 'field-row' });
-    bar.appendChild(TB.ui.field({ label: 'Server', type: 'select', value: state.serverId,
+    bar.appendChild(TB.ui.field({ label: 'Server', tip: TB.help.cfg.server, type: 'select', value: state.serverId,
       options: settings.servers.map(function (s) { return { value: s.id, label: s.name }; }),
       onChange: function (v) { state.serverId = v; render(); } }));
     bar.appendChild(el('button', { class: 'btn btn-secondary', text: 'Refresh from Settings',

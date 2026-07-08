@@ -78,9 +78,10 @@
       '# ' + new Array(78).join('-'),
       '# TRex Profile & Config Builder - t-rex-64 launcher',
       '# Generated: ' + (opts.now || TB.util.todayIso()) + '   Target: TRex v' + (model.trexVersion || '3.06'),
-      '# Mode: ' + (mode === 'legacy' ? 'legacy/batch STF' : 'interactive ' + mode.toUpperCase()),
-      '# ' + new Array(78).join('-')
+      '# Mode: ' + (mode === 'legacy' ? 'legacy/batch STF' : 'interactive ' + mode.toUpperCase())
     ];
+    header = header.concat(TB.gen.py.summaryComment(TB.gen.summary ? TB.gen.summary(model) : []));
+    header.push('# ' + new Array(78).join('-'));
 
     var script = ['#!/bin/bash'].concat(header).concat([
       'cd ' + trexDir,

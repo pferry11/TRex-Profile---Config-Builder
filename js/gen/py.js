@@ -49,6 +49,14 @@
       return lines;
     },
 
+    // "# Summary:" comment block from plain-English sentences (see summarize.js).
+    summaryComment: function (sentences) {
+      if (!sentences || !sentences.length) { return []; }
+      var out = ['# Summary:'];
+      sentences.forEach(function (l) { out.push('#   ' + l); });
+      return out;
+    },
+
     // argparse block used inside get_streams/get_profile. Returns indented lines.
     argparseLines: function (tunables, indent) {
       var py = TB.gen.py;

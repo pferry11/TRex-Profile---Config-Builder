@@ -80,6 +80,12 @@
     return gen(model, { now: now });
   }
 
+  function summarySection(model) {
+    var sentences = TB.gen.summary ? TB.gen.summary(model) : [];
+    if (!sentences.length) { return ''; }
+    return '\nWHAT THE PROFILE DOES\n' + sentences.map(function (l) { return '  - ' + l; }).join('\n') + '\n';
+  }
+
   function checklistLines(ranges) {
     return [
       'PRE-FLIGHT CHECKLIST',
@@ -195,6 +201,7 @@
 
     var r = generateProfile(model, now);
     if (!r) { return { ok: false, errors: ['No generator registered for TRex v' + model.trexVersion + '.'] }; }
+    runbook += summarySection(model);
     return {
       ok: true,
       model: model,
@@ -336,6 +343,7 @@
 
     var r = generateProfile(model, now);
     if (!r) { return { ok: false, errors: ['No generator registered for TRex v' + model.trexVersion + '.'] }; }
+    runbook += summarySection(model);
     return {
       ok: true,
       model: model,

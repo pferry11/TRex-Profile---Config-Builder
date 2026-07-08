@@ -48,7 +48,7 @@
 
     /* ---- server + mode row ---- */
     var r1 = el('div', { class: 'field-row' });
-    r1.appendChild(field({ label: 'Server (prefills cores / TRex dir)', type: 'select',
+    r1.appendChild(field({ label: 'Server (prefills cores / TRex dir)', tip: TB.help.cli.server, type: 'select',
       value: state.serverId,
       options: [{ value: '', label: '(custom)' }].concat(settings.servers.map(function (s) {
         return { value: s.id, label: s.name };
@@ -64,7 +64,7 @@
         }
         render();
       } }));
-    r1.appendChild(field({ label: 'Mode', type: 'select', value: m.mode,
+    r1.appendChild(field({ label: 'Mode', tip: TB.help.cli.mode, type: 'select', value: m.mode,
       options: [
         { value: 'astf', label: 'Interactive ASTF (-i --astf)' },
         { value: 'stl', label: 'Interactive STL (-i --stl)' },
@@ -79,7 +79,7 @@
     var r2 = el('div', { class: 'field-row' });
     if (m.mode !== 'legacy') {
       var saved = TB.persist.listProfiles(m.mode);
-      r2.appendChild(field({ label: 'Saved profile', type: 'select',
+      r2.appendChild(field({ label: 'Saved profile', tip: TB.help.cli.profile, type: 'select',
         value: '',
         options: [{ value: '', label: '(pick or type below)' }].concat(saved.map(function (p) {
           var f = p.meta.name.replace(/[^\w.-]+/g, '_') + '.py';
@@ -95,34 +95,34 @@
 
     /* ---- flags row ---- */
     var r3 = el('div', { class: 'field-row' });
-    r3.appendChild(field({ label: '--cfg path', type: 'text', value: m.cfgPath, width: '180px',
+    r3.appendChild(field({ label: '--cfg path', tip: TB.help.cli.cfgPath, type: 'text', value: m.cfgPath, width: '180px',
       onChange: function (v) { m.cfgPath = v || ''; regen(); } }));
-    r3.appendChild(field({ label: 'Cores (-c)', type: 'int', value: m.cores, width: '60px',
+    r3.appendChild(field({ label: 'Cores (-c)', tip: TB.help.cli.cores, type: 'int', value: m.cores, width: '60px',
       onChange: function (v) { m.cores = v; regen(); } }));
-    r3.appendChild(field({ label: 'Multiplier (-m)', type: 'float', value: m.mult, width: '70px',
+    r3.appendChild(field({ label: 'Multiplier (-m)', tip: TB.help.cli.mult, type: 'float', value: m.mult, width: '70px',
       onChange: function (v) { m.mult = v === null ? 1 : v; regen(); } }));
-    r3.appendChild(field({ label: 'Duration sec (-d)', type: 'int', value: m.durationSec, width: '80px',
+    r3.appendChild(field({ label: 'Duration sec (-d)', tip: TB.help.cli.duration, type: 'int', value: m.durationSec, width: '80px',
       onChange: function (v) { m.durationSec = v; regen(); } }));
     if (m.mode !== 'stl') {
-      r3.appendChild(field({ label: 'Latency pps (-l)', type: 'int', value: m.latencyPps, width: '80px',
+      r3.appendChild(field({ label: 'Latency pps (-l)', tip: TB.help.cli.latency, type: 'int', value: m.latencyPps, width: '80px',
         onChange: function (v) { m.latencyPps = v; regen(); } }));
     }
     if (m.mode === 'legacy') {
-      r3.appendChild(field({ label: '-p (flow-port affinity)', type: 'checkbox', value: m.flowPortAffinity,
+      r3.appendChild(field({ label: '-p (flow-port affinity)', tip: TB.help.cli.flowAffinity, type: 'checkbox', value: m.flowPortAffinity,
         onChange: function (v) { m.flowPortAffinity = v; regen(); } }));
     }
-    r3.appendChild(field({ label: 'TRex dir', type: 'text', value: m.trexDir, width: '150px',
+    r3.appendChild(field({ label: 'TRex dir', tip: TB.help.settings.trexDir, type: 'text', value: m.trexDir, width: '150px',
       onChange: function (v) { m.trexDir = v || ''; regen(); } }));
     wrap.appendChild(r3);
 
     /* ---- ASTF extras (mutually exclusive) ---- */
     if (m.mode === 'astf') {
       var r4 = el('div', { class: 'field-row' });
-      r4.appendChild(field({ label: '--astf-server-only (this box only answers)', type: 'checkbox',
+      r4.appendChild(field({ label: '--astf-server-only (this box only answers)', tip: TB.help.cli.serverOnly, type: 'checkbox',
         value: m.astfServerOnly,
         disabled: !!m.astfClientMask,
         onChange: function (v) { m.astfServerOnly = v; render(); } }));
-      r4.appendChild(field({ label: '--astf-client-mask (hex port bitmask)', type: 'text',
+      r4.appendChild(field({ label: '--astf-client-mask (hex port bitmask)', tip: TB.help.cli.clientMask, type: 'text',
         value: m.astfClientMask, width: '90px', placeholder: '0x1',
         disabled: m.astfServerOnly,
         validate: function (v) { return /^0x[0-9a-fA-F]+$/.test(v) ? null : 'expect hex like 0x1'; },
@@ -134,7 +134,7 @@
 
     /* ---- extra args ---- */
     var r5 = el('div', { class: 'field-row' });
-    r5.appendChild(field({ label: 'Extra args (appended verbatim)', type: 'text', value: m.extraArgs, width: '320px',
+    r5.appendChild(field({ label: 'Extra args (appended verbatim)', tip: TB.help.cli.extraArgs, type: 'text', value: m.extraArgs, width: '320px',
       onChange: function (v) { m.extraArgs = v || ''; regen(); } }));
     wrap.appendChild(r5);
 

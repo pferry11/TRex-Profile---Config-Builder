@@ -12,7 +12,8 @@
       onShow: function () { TB.ui.cfgBuilder.refresh(); } },
     { id: 'cli', label: 'CLI Builder', mount: function (c) { TB.ui.cliBuilder.mount(c); },
       onShow: function () { TB.ui.cliBuilder.refresh(); } },
-    { id: 'settings', label: 'Settings', mount: function (c) { TB.ui.settingsUi.mount(c); } }
+    { id: 'settings', label: 'Settings', mount: function (c) { TB.ui.settingsUi.mount(c); } },
+    { id: 'manual', label: 'Manual', mount: function (c) { TB.ui.manual.mount(c); } }
   ];
 
   function placeholder(container, label) {
@@ -111,7 +112,13 @@
     // expose for scenario wizards ("Open in builder")
     TB.app = { activateTab: activate };
 
+    /* ?tab=<id> deep link (used by tools/screenshots.ps1 and shareable URLs)
+     * overrides the persisted tab choice */
     var startTab = uiState.activeTab;
+    try {
+      var param = new URLSearchParams(location.search).get('tab');
+      if (param) { startTab = param; }
+    } catch (e) { /* very old browsers: fall back to persisted tab */ }
     var valid = TABS.some(function (t) { return t.id === startTab; });
     activate(valid ? startTab : 'stl');
   }

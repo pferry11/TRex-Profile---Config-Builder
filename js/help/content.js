@@ -1,0 +1,198 @@
+/* TRex Profile & Config Builder - help copy: the single source of truth for
+ * field tooltips AND the Manual tab's auto-generated field-reference tables.
+ * Structure per tab: _tab (one-line purpose), _sections (per collapsible
+ * section), then one entry per field. Keep entries short, concrete and
+ * TRex-accurate - they appear verbatim in tooltips. */
+(function (root) {
+  'use strict';
+  var TB = root.TB = root.TB || {};
+
+  TB.help = {
+    stl: {
+      _tab: 'Builds stateless (STL) traffic profiles: Python files defining packet streams that TRex transmits at a set rate, with optional per-packet field mutation.',
+      _sections: {
+        packet: 'What each transmitted packet looks like: L2/VLAN/L3/L4 headers plus padding to the target frame size.',
+        mode: 'How the stream transmits: continuously, one burst, or repeated bursts.',
+        chain: 'When the stream starts and what it triggers next - used to sequence streams.',
+        vm: 'The TRex Field Engine: mutates packet fields per packet (IP sweeps, random ports, tuple pools) so traffic is not identical.',
+        flowStats: 'Per-stream counters or latency measurement, identified by a packet-group id (pg_id).',
+        tunables: 'Named parameters exposed as --args of get_streams(); change values at load time without editing the profile.'
+      },
+      profileName: 'Name used for the generated .py file and when saving/loading this profile in the app.',
+      trexVersion: 'TRex version the generated code targets. Only v3.06 generators are registered today.',
+      streamName: 'Python-side stream name; other streams reference it in "next" chains.',
+      srcMac: 'Override the Ethernet source MAC. Leave empty to let TRex use the port MAC from trex_cfg.yaml.',
+      dstMac: 'Override the Ethernet destination MAC. Leave empty to use the resolved gateway/dest MAC.',
+      vlan: 'Insert an 802.1Q VLAN tag between Ethernet and L3.',
+      vlanId: 'VLAN identifier (1-4094).',
+      vlanPrio: '802.1p priority bits (0-7).',
+      l3: 'Network layer: IPv4 or IPv6.',
+      srcIp: 'Source IP written into every packet (the Field Engine can then sweep/randomise it).',
+      dstIp: 'Destination IP written into every packet.',
+      tos: 'IPv4 TOS/DSCP byte (optional).',
+      ttl: 'IPv4 time-to-live (optional).',
+      l4: 'Transport layer: UDP, TCP, or none (bare L3).',
+      sport: 'Source port.',
+      dport: 'Destination port.',
+      tcpFlags: 'TCP flags string, e.g. "S" for SYN - used for SYN-flood style streams.',
+      frameSize: 'Total on-wire frame size in bytes including headers; the payload is padded to reach it. Below 60 B many NICs pad or reject frames.',
+      bindTunable: 'Bind this field to a tunable so its value comes from --<name> at load time instead of a literal.',
+      fill: 'Character used to pad the payload.',
+      rawScapy: 'Escape hatch: a raw scapy expression that replaces the whole packet definition. Emitted verbatim and NOT validated by the app.',
+      mode: 'continuous = fixed pps until stopped; single burst = N packets then stop; multi burst = repeated bursts with a gap.',
+      pps: 'Packets per second at -m 1. The console -m multiplier scales all streams proportionally at run time.',
+      totalPkts: 'Number of packets in the single burst.',
+      pktsPerBurst: 'Packets in each burst.',
+      ibg: 'Inter-burst gap in microseconds between bursts.',
+      count: 'Number of bursts to send.',
+      isg: 'Inter-stream gap: delay in microseconds before this stream starts. Staggered isg values create rate ramps.',
+      selfStart: 'Ticked: stream starts on its own. Unticked: it only runs when another stream triggers it via "next".',
+      next: 'Stream to trigger when this one finishes its burst - chains streams into sequences or loops.',
+      actionCount: 'With a "next" loop back to an earlier stream: how many times to loop (0 = forever).',
+      vmVarName: 'Field Engine variable name (referenced by the write instruction).',
+      vmSize: 'Variable width in bytes: 1, 2, 4 or 8 - must cover the packet field it writes to.',
+      vmOp: 'How the value changes per packet: inc, dec, or random within min-max.',
+      vmMin: 'Lowest value (IPs allowed for 4-byte vars).',
+      vmMax: 'Highest value.',
+      vmStep: 'Increment step (default 1).',
+      vmWriteTo: 'Packet field the variable overwrites, e.g. IP.src, UDP.sport, or a raw byte offset.',
+      vmFixCsum: 'Recalculate the IPv4 checksum after the write (needed whenever IP header bytes change).',
+      tuple: 'Tuple generator: produces unique (client IP, port) pairs - the standard way to emulate many clients.',
+      tupleLimit: 'Maximum number of distinct flows the tuple pool generates.',
+      cacheSize: 'Pre-compute this many mutated packets and replay them - big CPU saving for repetitive mutation.',
+      fsType: 'none | flow stats (tx/rx counters per pg_id) | latency (adds latency/jitter measurement).',
+      pgId: 'Packet-group id identifying this stream in flow-stat reports. Each LATENCY stream needs a unique pg_id.',
+      addPortId: 'Adds the port number to pg_id so the same profile stays unique when loaded on several ports.',
+      tunableName: 'Argument name: becomes --<name> when loading the profile.',
+      tunableType: 'Argument type used by argparse (int/float/str/choice).',
+      tunableDefault: 'Value used when the argument is not given.',
+      tunableHelp: 'Help text shown by --help.'
+    },
+
+    astf: {
+      _tab: 'Builds advanced stateful (ASTF) profiles: full TCP/UDP connections between emulated clients and servers, from replayed pcaps or scripted send/recv programs.',
+      _sections: {
+        ipGen: 'The client and server IP pools TRex allocates connections from. Ranges must be routable through the device under test.',
+        globals: 'Optional per-side (client/server) tuning: TCP stack parameters, IPv6, and the CPS ramp-up scheduler.',
+        cap: 'One replayed pcap: TRex re-plays the captured flow, rewriting IPs from the generator pools.',
+        template: 'One traffic template: a client program and a server program tied together on an association port.'
+      },
+      profileName: 'Name used for the generated .py file and when saving/loading in the app.',
+      mode: 'pcap list: replay captured flows (easiest, realistic). program: script the exchange yourself with send/recv commands.',
+      clientRange: 'Client-side IP pool; TRex sources connections from these addresses.',
+      serverRange: 'Server-side IP pool; TRex answers on these addresses.',
+      distribution: 'seq allocates addresses in order; rand picks randomly from the range.',
+      perCore: 'Per-core distribution: seq gives each TRex core a contiguous slice of the range (useful for RSS/dual-port setups).',
+      ipOffset: 'Offset added to both pools per extra port pair, keeping dual-port traffic in separate subnets.',
+      pcapFile: 'Path to the pcap ON THE TREX BOX, relative to the profile (e.g. ../avl/x.pcap).',
+      cps: 'Connections per second this entry contributes at -m 1. Relative cps values set the traffic mix; -m scales everything at run time.',
+      portPin: 'Force this template onto a specific destination port instead of the one detected from the pcap.',
+      sDelay: 'Extra server-side response delay in microseconds.',
+      ipGenOverride: 'Give this entry its own client/server IP pools instead of the profile default.',
+      tgName: 'Template-group name: groups stats for related templates in the console.',
+      assocPort: 'Destination port the server side listens on; the client connects to it. Must be unique per template.',
+      transport: 'TCP exchanges a byte stream (send/recv); UDP exchanges datagrams (send_msg/recv_msg).',
+      cmdSend: 'Queue a payload to the peer. HTTP presets generate realistic request/response bytes.',
+      cmdRecv: 'Block until N bytes arrive. "auto" matches the peer’s send so the sizes never drift.',
+      cmdDelay: 'Pause the program - emulates think time or server processing.',
+      cmdLoop: 'set_var/set_label/jmp_nz form counted loops, e.g. a server that sends its response 10 times.',
+      httpBodyBytes: 'Body size of the generated HTTP response; Content-Length is set to match.',
+      tcpTuning: 'Only non-empty fields are emitted. mss/buffers/initwnd shape throughput; keepalive fields hold long idle flows.',
+      rampupSec: 'Linear CPS ramp: reach the full connection rate after N seconds. Client side drives the ramp.',
+      ipv6: 'Wrap the (IPv4-derived) addresses in IPv6 using the given src/dst most-significant bytes.'
+    },
+
+    cap2: {
+      _tab: 'Builds legacy stateful (STF) YAML profiles: the classic cap2 format that replays pcap templates with IP rewriting, run via t-rex-64 -f <profile>.yaml.',
+      _sections: {
+        generator: 'The IP tuple pool: client/server ranges the replayed flows are rewritten to use.',
+        flags: 'Global replay behaviour: packet timing, VLAN load-balancing, MAC derivation.',
+        cap: 'One pcap template with its own rate, timing and optional payload-rewrite rules.'
+      },
+      profileName: 'Name for the generated .yaml file and app save slot.',
+      duration: 'Test length in seconds (t-rex-64 -d can extend/override at run time).',
+      clientsRange: 'Client IP pool flows are sourced from.',
+      serversRange: 'Server IP pool flows are destined to. Must not overlap the client range.',
+      clientsPerGb: 'Scales how many client addresses are used per Gb/s of traffic.',
+      minClients: 'Lower bound on the number of active client addresses.',
+      dualPortMask: 'IP offset added on the second port pair so each pair uses its own subnet.',
+      aging: 'Seconds before an idle flow entry is recycled (0 = default).',
+      capIpg: "Replay packets with the pcap's own recorded inter-packet gaps instead of the fixed ipg below.",
+      capOverrideIpg: 'Force every template to this inter-packet gap (microseconds).',
+      capIpgMin: 'Lower bound applied to pcap-derived gaps.',
+      vlanLb: 'Alternate flows between two VLAN tags - the classic load-balancing trick.',
+      macOverrideByIp: 'Derive packet MACs from the IPs instead of the port config.',
+      pcapName: 'Pcap path relative to the TRex directory (e.g. cap2/dns.pcap or avl/....pcap).',
+      cps: 'Flows started per second from this template (absolute; the mix weight across templates).',
+      ipg: 'Inter-packet gap within a flow, microseconds.',
+      rtt: 'Assumed round-trip time, microseconds - shapes request/response spacing.',
+      w: 'Scheduler weight (leave 1 unless tuning burstiness).',
+      limit: 'Cap on simultaneously active flows from this template.',
+      pluginId: 'Protocol helper: 4 = HTTP, 5 = DHCP - enables protocol-aware replay.',
+      dynPktId: 'Which packet of the pcap (1-based) gets its payload rewritten.',
+      dynOffset: 'Byte offset into that packet’s payload where rewriting starts.',
+      dynType: '0 writes random data; 1 writes the flow’s client IP - makes each replayed flow unique.',
+      dynLen: 'How many 32-bit words to rewrite.',
+      dynMask: 'Bitmask applied to the written words (0xffffffff = replace fully).'
+    },
+
+    scenarios: {
+      _tab: 'Guided wizards for the two common test setups: a two-box send/receive run, and a low-to-mid-to-high connection ramp. Each generates a ready profile plus a step-by-step RUNBOOK.',
+      _sections: {
+        twoServer: 'One TRex box plays the traffic client, a second box plays the server; both load the SAME profile with different CLI flags.',
+        ramp: 'Grow the offered load in three stages using the mechanism that best fits your test.'
+      },
+      mechanismTwoServer: 'ASTF split (recommended): full TCP connections between the boxes. STL unidirectional: raw packets one way, counters on the receiver.',
+      senderHost: 'Label for the client-side box used in the runbook text.',
+      receiverHost: 'Label for the server-side box used in the runbook text.',
+      rampMechanism: '-m stepping = exact plateaus via console restarts; rampup_sec = smooth linear growth; weighted mix = steady blend at the high rate (approximation).',
+      stageRates: 'The three target rates. Must strictly increase: low < mid < high.',
+      stageSec: 'How long each stage lasts.'
+    },
+
+    cfg: {
+      _tab: 'Generates trex_cfg.yaml - the platform file telling TRex which NICs to own (PCI), how many cores to use, and each port’s L2/L3 identity. Installed as /etc/trex_cfg.yaml on the box.',
+      _sections: {},
+      server: 'Which server (from Settings) to generate the config for.'
+    },
+
+    cli: {
+      _tab: 'Composes the t-rex-64 launch command (and the matching trex-console session for interactive modes) with valid flags for the chosen mode.',
+      _sections: {},
+      server: 'Prefills cores and the TRex directory from the Settings registry.',
+      mode: 'Interactive modes start a server you drive from trex-console; legacy STF runs a cap2 YAML profile directly to completion.',
+      profile: 'Profile the console will start (interactive) or t-rex-64 -f will run (legacy).',
+      cfgPath: 'Platform config passed with --cfg; defaults to /etc/trex_cfg.yaml when omitted.',
+      cores: 'Data-plane cores per dual-interface (-c).',
+      mult: 'Rate multiplier (-m): scales every stream/template proportionally.',
+      duration: 'Run length in seconds (-d).',
+      latency: 'Latency probe rate in pps (-l) - legacy/ASTF only; STL latency comes from latency streams in the profile.',
+      flowAffinity: '-p: send all of a flow’s packets from one port (legacy mode).',
+      serverOnly: 'This box only answers connections (the receiver in a two-box setup). Generates no load.',
+      clientMask: 'Hex bitmask of local ports that act as the traffic client, e.g. 0x1 = port 0 only.',
+      extraArgs: 'Appended to the command verbatim - for flags the form does not cover.'
+    },
+
+    settings: {
+      _tab: 'App defaults plus the server registry: one entry per TRex box (PCI NICs, cores, port identities). The Platform Config and CLI tabs read from here.',
+      _sections: {},
+      trexVersion: 'Default target version for new profiles and configs.',
+      pcapDir: 'Where pcaps live on the box - used as a hint next to pcap path fields.',
+      activeServer: 'Server preselected in the Platform Config tab.',
+      name: 'Short name for this box, used in filenames and dropdowns.',
+      mgmtHost: 'Management address (informational; shown in generated config headers).',
+      trexDir: 'TRex install directory on the box - used in runbooks and launch scripts.',
+      cores: 'Data-plane cores per dual-interface (becomes "c" in trex_cfg.yaml).',
+      portLimit: 'How many ports TRex claims (port_limit).',
+      bandwidth: 'NIC speed hint (port_bandwidth_gb): 1 for VMs, 10/40 for physical NICs.',
+      interfaces: 'DPDK PCI addresses of the NICs TRex owns. Find them with ./dpdk_setup_ports.py -s on the box.',
+      portMode: 'IP/gateway: TRex ARPs for the gateway (L3). MAC pair: static L2 addressing, typically cross-wired between paired ports.',
+      platform: 'NUMA thread pinning: master and latency threads plus per-socket data-plane thread lists (dual_if).',
+      memory: 'dp_flows sizes flow memory - raise it for millions of concurrent flows.',
+      limitMemory: 'Cap TRex hugepage memory (MB).',
+      prefix: 'Instance name prefix for running multiple TRex instances on one box.',
+      zmqPub: 'Enable the ZMQ stats publisher.',
+      telnetPort: 'Legacy telnet console port.'
+    }
+  };
+})(typeof window !== 'undefined' ? window : globalThis);

@@ -122,14 +122,14 @@
       /* ---------- top bar ---------- */
       function renderTopbar() {
         topbar.innerHTML = '';
-        topbar.appendChild(field({ label: 'Profile name', type: 'text', value: model.meta.name, width: '160px',
+        topbar.appendChild(field({ label: 'Profile name', tip: TB.help.astf.profileName, type: 'text', value: model.meta.name, width: '160px',
           onChange: function (v) { model.meta.name = v || 'astf_profile'; regen(); } }));
         topbar.appendChild(field({ label: 'Description', type: 'text', value: model.meta.description, width: '180px',
           onChange: function (v) { model.meta.description = v || ''; regen(); } }));
-        topbar.appendChild(field({ label: 'TRex version', type: 'select', value: model.trexVersion,
+        topbar.appendChild(field({ label: 'TRex version', tip: TB.help.astf.trexVersion, type: 'select', value: model.trexVersion,
           options: TB.gen.versions().map(function (v) { return { value: v, label: 'v' + v }; }),
           onChange: function (v) { model.trexVersion = v; regen(); } }));
-        topbar.appendChild(field({ label: 'Mode', type: 'select', value: model.mode,
+        topbar.appendChild(field({ label: 'Mode', tip: TB.help.astf.mode, type: 'select', value: model.mode,
           options: [{ value: 'pcap', label: 'pcap list (ASTFCapInfo)' }, { value: 'program', label: 'program (send/recv)' }],
           onChange: function (v) {
             model.mode = v;
@@ -258,10 +258,10 @@
         box.appendChild(field({ label: 'end', type: 'text', value: side.end, width: '110px',
           validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
           onChange: function (v) { side.end = v || ''; regen(); } }));
-        box.appendChild(field({ label: 'distribution', type: 'select', value: side.distribution,
+        box.appendChild(field({ label: 'distribution', tip: TB.help.astf.distribution, type: 'select', value: side.distribution,
           options: [{ value: 'seq' }, { value: 'rand' }],
           onChange: function (v) { side.distribution = v; regen(); } }));
-        box.appendChild(field({ label: 'per-core', type: 'select', value: side.perCore || '',
+        box.appendChild(field({ label: 'per-core', tip: TB.help.astf.perCore, type: 'select', value: side.perCore || '',
           options: [{ value: '', label: '(default)' }, { value: 'seq', label: 'seq' }],
           onChange: function (v) { side.perCore = v || null; regen(); } }));
         return box;
@@ -271,7 +271,7 @@
         var box = el('div', {});
         box.appendChild(rangeFields(model.ipGen.client, 'Clients'));
         box.appendChild(rangeFields(model.ipGen.server, 'Servers'));
-        box.appendChild(field({ label: 'ip_offset (added per dual-port pair)', type: 'text',
+        box.appendChild(field({ label: 'ip_offset (added per dual-port pair)', tip: TB.help.astf.ipOffset, type: 'text',
           value: model.ipGen.ipOffset, width: '100px',
           onChange: function (v) { model.ipGen.ipOffset = v || '1.0.0.0'; regen(); } }));
         return box;
@@ -283,15 +283,15 @@
         var row = el('div', { class: 'field-row' });
         ['mss', 'rxbufsize', 'txbufsize', 'initwnd', 'no_delay', 'do_rfc1323', 'keepinit', 'keepidle', 'keepintvl']
           .forEach(function (f) {
-            row.appendChild(field({ label: 'tcp.' + f, type: 'int', value: g.tcp[f], width: '80px',
+            row.appendChild(field({ label: 'tcp.' + f, tip: TB.help.astf.tcpTuning, type: 'int', value: g.tcp[f], width: '80px',
               onChange: function (v) { g.tcp[f] = v; regen(); } }));
           });
         box.appendChild(row);
         var row2 = el('div', { class: 'field-row' });
-        row2.appendChild(field({ label: 'rampup_sec', type: 'int', value: g.scheduler.rampupSec, width: '80px',
+        row2.appendChild(field({ label: 'rampup_sec', tip: TB.help.astf.rampupSec, type: 'int', value: g.scheduler.rampupSec, width: '80px',
           hint: 'linear CPS ramp to max over N sec' + (label === 'Server side' ? ' (client side drives the ramp)' : ''),
           onChange: function (v) { g.scheduler.rampupSec = v; regen(); } }));
-        row2.appendChild(field({ label: 'IPv6', type: 'checkbox', value: g.ipv6.enable,
+        row2.appendChild(field({ label: 'IPv6', tip: TB.help.astf.ipv6, type: 'checkbox', value: g.ipv6.enable,
           onChange: function (v) { g.ipv6.enable = v; renderEditor(); regen(); } }));
         if (g.ipv6.enable) {
           row2.appendChild(field({ label: 'src MSB', type: 'text', value: g.ipv6.srcMsb, width: '90px',
@@ -314,7 +314,7 @@
 
       function overrideEditor(holder) {
         var box = el('div', {});
-        box.appendChild(field({ label: 'Override IP generator for this entry', type: 'checkbox',
+        box.appendChild(field({ label: 'Override IP generator for this entry', tip: TB.help.astf.ipGenOverride, type: 'checkbox',
           value: !!holder.ipGenOverride,
           onChange: function (v) {
             holder.ipGenOverride = v ? {
@@ -335,7 +335,7 @@
       function capEditor(c) {
         var box = el('div', {});
         var row = el('div', { class: 'field-row' });
-        row.appendChild(field({ label: 'Pcap file (path on the TRex box)', type: 'text', value: c.file,
+        row.appendChild(field({ label: 'Pcap file (path on the TRex box)', tip: TB.help.astf.pcapFile, type: 'text', value: c.file,
           width: '280px', datalist: 'avl-pcaps',
           hint: 'pcap dir setting: ' + TB.settings.get().defaults.pcapDir,
           onChange: function (v) { c.file = v || ''; renderList(); regen(); } }));
@@ -344,11 +344,11 @@
           renderList(); renderEditor(); regen();
         });
         if (browse) { row.appendChild(browse); }
-        row.appendChild(field({ label: 'cps (at -m 1)', type: 'float', value: c.cps, width: '80px',
+        row.appendChild(field({ label: 'cps (at -m 1)', tip: TB.help.astf.cps, type: 'float', value: c.cps, width: '80px',
           onChange: function (v) { c.cps = v === null ? 1 : v; renderList(); regen(); } }));
-        row.appendChild(field({ label: 'Port pin (opt.)', type: 'int', value: c.port, width: '70px',
+        row.appendChild(field({ label: 'Port pin (opt.)', tip: TB.help.astf.portPin, type: 'int', value: c.port, width: '70px',
           onChange: function (v) { c.port = v; regen(); } }));
-        row.appendChild(field({ label: 's_delay µs (opt.)', type: 'int', value: c.sDelayUsec, width: '90px',
+        row.appendChild(field({ label: 's_delay µs (opt.)', tip: TB.help.astf.sDelay, type: 'int', value: c.sDelayUsec, width: '90px',
           onChange: function (v) { c.sDelayUsec = v; regen(); } }));
         box.appendChild(row);
         box.appendChild(overrideEditor(c));
@@ -359,7 +359,7 @@
       function payloadFields(cmd) {
         var wrap = el('span', { class: 'field-row-inline' });
         var p = cmd.payload;
-        wrap.appendChild(field({ label: 'payload', type: 'select', value: p.kind,
+        wrap.appendChild(field({ label: 'payload', tip: TB.help.astf.cmdSend, type: 'select', value: p.kind,
           options: [{ value: 'text', label: 'text' }, { value: 'httpRequest', label: 'HTTP request preset' },
                     { value: 'httpResponse', label: 'HTTP response preset' }],
           onChange: function (v) {
@@ -372,7 +372,7 @@
           wrap.appendChild(field({ label: 'text (\\r\\n allowed)', type: 'text', value: p.text, width: '220px',
             onChange: function (v) { p.text = v || ''; regen(); } }));
         } else if (p.kind === 'httpResponse') {
-          wrap.appendChild(field({ label: 'body bytes', type: 'int', value: p.bodyBytes, width: '80px',
+          wrap.appendChild(field({ label: 'body bytes', tip: TB.help.astf.httpBodyBytes, type: 'int', value: p.bodyBytes, width: '80px',
             onChange: function (v) { p.bodyBytes = v === null ? 0 : v; regen(); } }));
         }
         return wrap;
@@ -387,10 +387,10 @@
             break;
           case 'recv': {
             var auto = cmd.bytes === null || cmd.bytes === undefined;
-            row.appendChild(field({ label: 'auto (match peer send)', type: 'checkbox', value: auto,
+            row.appendChild(field({ label: 'auto (match peer send)', tip: TB.help.astf.cmdRecv, type: 'checkbox', value: auto,
               onChange: function (v) { cmd.bytes = v ? null : 0; renderEditor(); regen(); } }));
             if (!auto) {
-              row.appendChild(field({ label: 'bytes', type: 'int', value: cmd.bytes, width: '90px',
+              row.appendChild(field({ label: 'bytes', tip: TB.help.astf.cmdRecv, type: 'int', value: cmd.bytes, width: '90px',
                 onChange: function (v) { cmd.bytes = v === null ? 0 : v; regen(); } }));
             }
             break;
@@ -469,13 +469,13 @@
       function templateEditor(t) {
         var box = el('div', {});
         var row = el('div', { class: 'field-row' });
-        row.appendChild(field({ label: 'Template group name (opt.)', type: 'text', value: t.tgName, width: '120px',
+        row.appendChild(field({ label: 'Template group name (opt.)', tip: TB.help.astf.tgName, type: 'text', value: t.tgName, width: '120px',
           onChange: function (v) { t.tgName = v; renderList(); regen(); } }));
-        row.appendChild(field({ label: 'cps (weight at -m 1)', type: 'float', value: t.cps, width: '90px',
+        row.appendChild(field({ label: 'cps (weight at -m 1)', tip: TB.help.astf.cps, type: 'float', value: t.cps, width: '90px',
           onChange: function (v) { t.cps = v === null ? 1 : v; renderList(); regen(); } }));
-        row.appendChild(field({ label: 'Association port', type: 'int', value: t.assocPort, width: '80px',
+        row.appendChild(field({ label: 'Association port', tip: TB.help.astf.assocPort, type: 'int', value: t.assocPort, width: '80px',
           onChange: function (v) { t.assocPort = v; renderList(); regen(); } }));
-        row.appendChild(field({ label: 'Transport', type: 'select', value: t.stream === false ? 'udp' : 'tcp',
+        row.appendChild(field({ label: 'Transport', tip: TB.help.astf.transport, type: 'select', value: t.stream === false ? 'udp' : 'tcp',
           options: [{ value: 'tcp', label: 'TCP (stream)' }, { value: 'udp', label: 'UDP (messages)' }],
           onChange: function (v) { t.stream = v !== 'udp'; renderList(); renderEditor(); regen(); } }));
         box.appendChild(row);
@@ -489,8 +489,8 @@
       function renderEditor() {
         editorPane.innerHTML = '';
         editorPane.appendChild(el('div', { class: 'pane-title', text: 'Profile' }));
-        editorPane.appendChild(TB.ui.section('IP generator', ipGenSection(), true));
-        editorPane.appendChild(TB.ui.section('Global info (TCP tuning / rampup / IPv6)', globalsSection(), false));
+        editorPane.appendChild(TB.ui.section('IP generator', ipGenSection(), true, TB.help.astf._sections.ipGen));
+        editorPane.appendChild(TB.ui.section('Global info (TCP tuning / rampup / IPv6)', globalsSection(), false, TB.help.astf._sections.globals));
 
         var it = items()[selectedIdx];
         if (!it) {
@@ -500,7 +500,8 @@
         var title = model.mode === 'pcap'
           ? 'Pcap entry: ' + (it.file || '').split('/').pop()
           : 'Template: ' + (it.tgName || 'template ' + (selectedIdx + 1));
-        editorPane.appendChild(TB.ui.section(title, model.mode === 'pcap' ? capEditor(it) : templateEditor(it), true));
+        editorPane.appendChild(TB.ui.section(title, model.mode === 'pcap' ? capEditor(it) : templateEditor(it), true,
+          model.mode === 'pcap' ? TB.help.astf._sections.cap : TB.help.astf._sections.template));
       }
 
       function renderAll() {

@@ -207,6 +207,12 @@
       validate: './astf-sim -f ' + fileBase + '.py --full -o /tmp/',
       modelFile: fileBase + '.trexb.json'
     });
+    var summary = py.summaryComment(TB.gen.summary ? TB.gen.summary(model) : []);
+    if (summary.length) {
+      var closing = lines.pop();
+      lines = lines.concat(summary);
+      lines.push(closing);
+    }
     lines.push('from trex.astf.api import *');
     lines.push('import argparse');
     lines.push('');

@@ -50,14 +50,14 @@
 
         /* ---- defaults ---- */
         var defBody = el('div', { class: 'field-row' });
-        defBody.appendChild(field({ label: 'Default TRex version', type: 'select',
+        defBody.appendChild(field({ label: 'Default TRex version', tip: TB.help.settings.trexVersion, type: 'select',
           value: settings.defaults.trexVersion,
           options: TB.gen.versions().map(function (v) { return { value: v, label: 'v' + v }; }),
           onChange: function (v) { settings.defaults.trexVersion = v; save(); } }));
-        defBody.appendChild(field({ label: 'Pcap directory on the TRex box', type: 'text',
+        defBody.appendChild(field({ label: 'Pcap directory on the TRex box', tip: TB.help.settings.pcapDir, type: 'text',
           value: settings.defaults.pcapDir, width: '250px',
           onChange: function (v) { settings.defaults.pcapDir = v || ''; save(); } }));
-        defBody.appendChild(field({ label: 'Active server', type: 'select',
+        defBody.appendChild(field({ label: 'Active server', tip: TB.help.settings.activeServer, type: 'select',
           value: settings.defaults.activeServerId || '',
           options: [{ value: '', label: '(none)' }].concat(settings.servers.map(function (s) {
             return { value: s.id, label: s.name };
@@ -80,17 +80,17 @@
         var box = el('div', {});
 
         var r1 = el('div', { class: 'field-row' });
-        r1.appendChild(field({ label: 'Name', type: 'text', value: srv.name, width: '120px',
+        r1.appendChild(field({ label: 'Name', tip: TB.help.settings.name, type: 'text', value: srv.name, width: '120px',
           onChange: function (v) { srv.name = v || 'server'; save(); } }));
-        r1.appendChild(field({ label: 'Mgmt host/IP', type: 'text', value: srv.mgmtHost, width: '130px',
+        r1.appendChild(field({ label: 'Mgmt host/IP', tip: TB.help.settings.mgmtHost, type: 'text', value: srv.mgmtHost, width: '130px',
           onChange: function (v) { srv.mgmtHost = v || ''; save(); } }));
-        r1.appendChild(field({ label: 'TRex dir', type: 'text', value: srv.trexDir, width: '160px',
+        r1.appendChild(field({ label: 'TRex dir', tip: TB.help.settings.trexDir, type: 'text', value: srv.trexDir, width: '160px',
           onChange: function (v) { srv.trexDir = v || ''; save(); } }));
-        r1.appendChild(field({ label: 'Cores (c)', type: 'int', value: srv.cores, width: '60px',
+        r1.appendChild(field({ label: 'Cores (c)', tip: TB.help.settings.cores, type: 'int', value: srv.cores, width: '60px',
           onChange: function (v) { srv.cores = v; save(); } }));
-        r1.appendChild(field({ label: 'Port limit', type: 'int', value: srv.portLimit, width: '60px',
+        r1.appendChild(field({ label: 'Port limit', tip: TB.help.settings.portLimit, type: 'int', value: srv.portLimit, width: '60px',
           onChange: function (v) { srv.portLimit = v; save(); } }));
-        r1.appendChild(field({ label: 'Bandwidth (Gb)', type: 'int', value: srv.portBandwidthGb, width: '70px',
+        r1.appendChild(field({ label: 'Bandwidth (Gb)', tip: TB.help.settings.bandwidth, type: 'int', value: srv.portBandwidthGb, width: '70px',
           hint: '1 for VM, 10/40 for NICs',
           onChange: function (v) { srv.portBandwidthGb = v; save(); } }));
         box.appendChild(r1);
@@ -117,7 +117,7 @@
         srv.ports.forEach(function (port, i) {
           var pr = el('div', { class: 'field-row' });
           pr.appendChild(el('span', { class: 'field-label range-label', text: 'port ' + i }));
-          pr.appendChild(field({ label: 'mode', type: 'select', value: port.mode,
+          pr.appendChild(field({ label: 'mode', tip: TB.help.settings.portMode, type: 'select', value: port.mode,
             options: [{ value: 'ip', label: 'IP / gateway' }, { value: 'mac', label: 'MAC pair' }],
             onChange: function (v) { port.mode = v; save(); render(); } }));
           if (port.mode === 'ip') {
@@ -152,7 +152,7 @@
         /* platform */
         var plat = srv.platform;
         var platRow = el('div', { class: 'field-row' });
-        platRow.appendChild(field({ label: 'Platform block (NUMA thread pinning)', type: 'checkbox',
+        platRow.appendChild(field({ label: 'Platform block (NUMA thread pinning)', tip: TB.help.settings.platform, type: 'checkbox',
           value: plat.enabled,
           onChange: function (v) { plat.enabled = v; save(); render(); } }));
         if (plat.enabled) {
@@ -188,20 +188,20 @@
 
         /* memory + misc */
         var mRow = el('div', { class: 'field-row' });
-        mRow.appendChild(field({ label: 'Memory block', type: 'checkbox', value: srv.memory.enabled,
+        mRow.appendChild(field({ label: 'Memory block', tip: TB.help.settings.memory, type: 'checkbox', value: srv.memory.enabled,
           onChange: function (v) { srv.memory.enabled = v; save(); render(); } }));
         if (srv.memory.enabled) {
-          mRow.appendChild(field({ label: 'dp_flows', type: 'int', value: srv.memory.dpFlows, width: '100px',
+          mRow.appendChild(field({ label: 'dp_flows', tip: TB.help.settings.memory, type: 'int', value: srv.memory.dpFlows, width: '100px',
             hint: 'e.g. 10048576 for many flows',
             onChange: function (v) { srv.memory.dpFlows = v; save(); } }));
         }
-        mRow.appendChild(field({ label: 'limit_memory (MB)', type: 'int', value: srv.limitMemory, width: '80px',
+        mRow.appendChild(field({ label: 'limit_memory (MB)', tip: TB.help.settings.limitMemory, type: 'int', value: srv.limitMemory, width: '80px',
           onChange: function (v) { srv.limitMemory = v; save(); } }));
-        mRow.appendChild(field({ label: 'prefix (multi-instance)', type: 'text', value: srv.prefix, width: '90px',
+        mRow.appendChild(field({ label: 'prefix (multi-instance)', tip: TB.help.settings.prefix, type: 'text', value: srv.prefix, width: '90px',
           onChange: function (v) { srv.prefix = v; save(); } }));
-        mRow.appendChild(field({ label: 'ZMQ pub', type: 'checkbox', value: srv.enableZmqPub === true,
+        mRow.appendChild(field({ label: 'ZMQ pub', tip: TB.help.settings.zmqPub, type: 'checkbox', value: srv.enableZmqPub === true,
           onChange: function (v) { srv.enableZmqPub = v ? true : null; save(); } }));
-        mRow.appendChild(field({ label: 'telnet_port', type: 'int', value: srv.telnetPort, width: '70px',
+        mRow.appendChild(field({ label: 'telnet_port', tip: TB.help.settings.telnetPort, type: 'int', value: srv.telnetPort, width: '70px',
           onChange: function (v) { srv.telnetPort = v; save(); } }));
         box.appendChild(mRow);
 

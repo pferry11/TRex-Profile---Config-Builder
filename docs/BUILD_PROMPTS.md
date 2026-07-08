@@ -521,6 +521,19 @@ Wrap the existing "TRex Profile & Config Builder" static web app in a minimal Fl
 ---
 ---
 
+## PROMPT 6 — Tooltips, user manual tab, and profile summaries (built 2026-07-07)
+
+Extend the app with three usability features, keeping all repo conventions (classic scripts, `TB` namespace, pure generators, golden tests):
+
+1. **Help dictionary + tooltips.** New `js/help/content.js` (`TB.help`) — one entry per field/section per tab; the single source of truth for help copy. `TB.ui.field` gains a `tip` option rendering a ⓘ icon with a CSS-only styled hover tooltip (`data-tip` + `::after` bubble; `title` fallback on the input); `TB.ui.section` gains a 4th `tip` arg. Wire `tip: TB.help.<tab>.<key>` through every field in the seven builder UIs (missing keys render no icon, so partial coverage never breaks).
+2. **Manual tab.** `js/ui/manual.js`: TOC sidebar + chapters (Getting started, one per tab, Scenarios explained, Running on the TRex box, Glossary). Each tab chapter shows its purpose from `TB.help.<tab>._tab`, a screenshot `<img src="docs/img/<tab>.png">` that hides via `onerror` when absent, walkthrough prose, and a **field-reference table auto-generated from `TB.help`** so tooltips and manual never drift. Prerequisite: `?tab=<id>` URL deep-link support in `app.js`. Screenshots are captured by `tools/screenshots.ps1` using headless Microsoft Edge against the deep links (`--headless --screenshot --virtual-time-budget=4000`).
+3. **Profile summaries.** `js/gen/summarize.js`: pure per-kind functions (`stl/astf/cap2/cfg/cli`) registered under `TB.gen.registry["3.06"].summarize`, plus a `TB.gen.summary(model)` dispatcher keyed by model kind/version. Summaries render as a collapsible "What this does" box in the output pane (`output.js`, driven by the model all builders already pass), are embedded as `# Summary:` comment lines in every generated file header (via `TB.gen.py.summaryComment`), and appear as a "WHAT THE PROFILE DOES" section in scenario RUNBOOKs. All goldens updated to include the summary block — which doubles as exact-match summary testing.
+
+Acceptance: `file://` still clean; hover any ⓘ shows the styled tip; Manual tab renders all chapters with screenshots and auto tables; every builder output shows the live summary box whose lines also appear in the downloaded file header; tests all green (48 at time of build).
+
+---
+---
+
 ## After all phases
 
 - Run the full `tests.html` suite (all phases' fixtures) in Chrome + Firefox from `file://`.

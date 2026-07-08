@@ -246,6 +246,12 @@
       validate: './stl-sim -f ' + fileBase + '.py -o /tmp/out.pcap -l 50',
       modelFile: fileBase + '.trexb.json'
     });
+    var summary = py.summaryComment(TB.gen.summary ? TB.gen.summary(model) : []);
+    if (summary.length) {
+      var closing = lines.pop();
+      lines = lines.concat(summary);
+      lines.push(closing);
+    }
     lines.push('from trex_stl_lib.api import *');
     lines.push('import argparse');
     lines.push('');

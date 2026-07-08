@@ -79,9 +79,10 @@
       '# TRex Profile & Config Builder - cap2 legacy STF profile',
       '# Generated: ' + (opts.now || TB.util.todayIso()) + '   Target: TRex v' + (model.trexVersion || '3.06'),
       '# Run: ./t-rex-64 -f ' + fileBase + '.yaml -d ' + (model.duration || 10) + ' --cfg /etc/trex_cfg.yaml',
-      '# Re-edit: load ' + fileBase + '.trexb.json in TRex Profile & Config Builder',
-      '# ' + new Array(78).join('-')
+      '# Re-edit: load ' + fileBase + '.trexb.json in TRex Profile & Config Builder'
     ];
+    lines = lines.concat(TB.gen.py.summaryComment(TB.gen.summary ? TB.gen.summary(model) : []));
+    lines.push('# ' + new Array(78).join('-'));
 
     var body = [];
     body.push('  duration : ' + durationStr(model.duration));

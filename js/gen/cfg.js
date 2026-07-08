@@ -99,9 +99,12 @@
       '# Generated: ' + (opts.now || TB.util.todayIso()) + '   Target: TRex v' + (opts.trexVersion || '3.06'),
       '# Server: ' + (server.name || '?') + (server.mgmtHost ? ' (' + server.mgmtHost + ')' : ''),
       '# Install as /etc/trex_cfg.yaml (or pass --cfg <path> to t-rex-64)',
-      '# Find PCI addresses with: ./dpdk_setup_ports.py -s',
-      '# ' + new Array(78).join('-')
+      '# Find PCI addresses with: ./dpdk_setup_ports.py -s'
     ];
+    var sumSet = TB.gen.registry[opts.trexVersion || '3.06'];
+    var sentences = (sumSet && sumSet.summarize && sumSet.summarize.cfg) ? sumSet.summarize.cfg(server) : [];
+    lines = lines.concat(TB.gen.py.summaryComment(sentences));
+    lines.push('# ' + new Array(78).join('-'));
 
     /* first key carries the mandatory leading dash of the single-element list */
     var body = [];

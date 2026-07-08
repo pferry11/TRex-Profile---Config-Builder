@@ -30,6 +30,15 @@
         ]));
       }
 
+      /* plain-English summary of what the artifact does */
+      var summary = (model && TB.gen.summary) ? TB.gen.summary(model) : [];
+      if (summary.length) {
+        var sumList = el('ul', { class: 'summary-list' }, summary.map(function (s) {
+          return el('li', { text: s });
+        }));
+        container.appendChild(TB.ui.section('What this does', sumList, true));
+      }
+
       var activeIdx = 0;
       var codeEl = el('pre', { class: 'code' });
       var tabsEl = el('div', { class: 'file-tabs' });

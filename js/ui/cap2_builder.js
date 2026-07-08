@@ -62,11 +62,11 @@
       /* ---------- top bar (same pattern as the other builders) ---------- */
       function renderTopbar() {
         topbar.innerHTML = '';
-        topbar.appendChild(field({ label: 'Profile name', type: 'text', value: model.meta.name, width: '160px',
+        topbar.appendChild(field({ label: 'Profile name', tip: TB.help.cap2.profileName, type: 'text', value: model.meta.name, width: '160px',
           onChange: function (v) { model.meta.name = v || 'stf_profile'; regen(); } }));
-        topbar.appendChild(field({ label: 'Duration (sec)', type: 'float', value: model.duration, width: '80px',
+        topbar.appendChild(field({ label: 'Duration (sec)', tip: TB.help.cap2.duration, type: 'float', value: model.duration, width: '80px',
           onChange: function (v) { model.duration = v === null ? 10 : v; regen(); } }));
-        topbar.appendChild(field({ label: 'TRex version', type: 'select', value: model.trexVersion,
+        topbar.appendChild(field({ label: 'TRex version', tip: TB.help.stl.trexVersion, type: 'select', value: model.trexVersion,
           options: TB.gen.versions().map(function (v) { return { value: v, label: 'v' + v }; }),
           onChange: function (v) { model.trexVersion = v; regen(); } }));
 
@@ -175,27 +175,28 @@
         var g = model.generator;
         var box = el('div', {});
         var r1 = el('div', { class: 'field-row' });
-        r1.appendChild(field({ label: 'Distribution', type: 'select', value: g.distribution,
+        r1.appendChild(field({ label: 'Distribution', tip: TB.help.astf.distribution, type: 'select', value: g.distribution,
           options: [{ value: 'seq' }, { value: 'rand' }],
           onChange: function (v) { g.distribution = v; regen(); } }));
         [['clientsStart', 'Clients start'], ['clientsEnd', 'Clients end'],
          ['serversStart', 'Servers start'], ['serversEnd', 'Servers end']].forEach(function (p) {
           r1.appendChild(field({ label: p[1], type: 'text', value: g[p[0]], width: '105px',
+            tip: p[0].indexOf('clients') === 0 ? TB.help.cap2.clientsRange : TB.help.cap2.serversRange,
             validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
             onChange: function (v) { g[p[0]] = v || ''; regen(); } }));
         });
         box.appendChild(r1);
         var r2 = el('div', { class: 'field-row' });
-        r2.appendChild(field({ label: 'clients_per_gb', type: 'int', value: g.clientsPerGb, width: '80px',
+        r2.appendChild(field({ label: 'clients_per_gb', tip: TB.help.cap2.clientsPerGb, type: 'int', value: g.clientsPerGb, width: '80px',
           onChange: function (v) { g.clientsPerGb = v; regen(); } }));
-        r2.appendChild(field({ label: 'min_clients', type: 'int', value: g.minClients, width: '80px',
+        r2.appendChild(field({ label: 'min_clients', tip: TB.help.cap2.minClients, type: 'int', value: g.minClients, width: '80px',
           onChange: function (v) { g.minClients = v; regen(); } }));
-        r2.appendChild(field({ label: 'dual_port_mask', type: 'text', value: g.dualPortMask, width: '90px',
+        r2.appendChild(field({ label: 'dual_port_mask', tip: TB.help.cap2.dualPortMask, type: 'text', value: g.dualPortMask, width: '90px',
           hint: 'IP offset added on the second port pair',
           onChange: function (v) { g.dualPortMask = v; regen(); } }));
-        r2.appendChild(field({ label: 'tcp_aging (s)', type: 'int', value: g.tcpAging, width: '70px',
+        r2.appendChild(field({ label: 'tcp_aging (s)', tip: TB.help.cap2.aging, type: 'int', value: g.tcpAging, width: '70px',
           onChange: function (v) { g.tcpAging = v; regen(); } }));
-        r2.appendChild(field({ label: 'udp_aging (s)', type: 'int', value: g.udpAging, width: '70px',
+        r2.appendChild(field({ label: 'udp_aging (s)', tip: TB.help.cap2.aging, type: 'int', value: g.udpAging, width: '70px',
           onChange: function (v) { g.udpAging = v; regen(); } }));
         box.appendChild(r2);
         return box;
@@ -205,18 +206,18 @@
         var f = model.flags;
         var box = el('div', {});
         var r1 = el('div', { class: 'field-row' });
-        r1.appendChild(field({ label: "cap_ipg (use pcap's real inter-packet gaps)", type: 'checkbox',
+        r1.appendChild(field({ label: "cap_ipg (use pcap's real inter-packet gaps)", tip: TB.help.cap2.capIpg, type: 'checkbox',
           value: f.capIpg === true,
           onChange: function (v) { f.capIpg = v ? true : null; regen(); } }));
-        r1.appendChild(field({ label: 'cap_override_ipg (µs)', type: 'int', value: f.capOverrideIpg, width: '90px',
+        r1.appendChild(field({ label: 'cap_override_ipg (µs)', tip: TB.help.cap2.capOverrideIpg, type: 'int', value: f.capOverrideIpg, width: '90px',
           onChange: function (v) { f.capOverrideIpg = v; regen(); } }));
-        r1.appendChild(field({ label: 'cap_ipg_min (µs)', type: 'int', value: f.capIpgMin, width: '90px',
+        r1.appendChild(field({ label: 'cap_ipg_min (µs)', tip: TB.help.cap2.capIpgMin, type: 'int', value: f.capIpgMin, width: '90px',
           onChange: function (v) { f.capIpgMin = v; regen(); } }));
-        r1.appendChild(field({ label: 'mac_override_by_ip', type: 'int', value: f.macOverrideByIp, width: '70px',
+        r1.appendChild(field({ label: 'mac_override_by_ip', tip: TB.help.cap2.macOverrideByIp, type: 'int', value: f.macOverrideByIp, width: '70px',
           onChange: function (v) { f.macOverrideByIp = v; regen(); } }));
         box.appendChild(r1);
         var r2 = el('div', { class: 'field-row' });
-        r2.appendChild(field({ label: 'VLAN load balance', type: 'checkbox', value: f.vlan.enabled,
+        r2.appendChild(field({ label: 'VLAN load balance', tip: TB.help.cap2.vlanLb, type: 'checkbox', value: f.vlan.enabled,
           onChange: function (v) { f.vlan.enabled = v; renderEditor(); regen(); } }));
         if (f.vlan.enabled) {
           r2.appendChild(field({ label: 'vlan0', type: 'int', value: f.vlan.vlan0, width: '65px',
@@ -231,7 +232,7 @@
       function capEditor(c) {
         var box = el('div', {});
         var r1 = el('div', { class: 'field-row' });
-        r1.appendChild(field({ label: 'Pcap path (relative to the TRex dir)', type: 'text', value: c.name,
+        r1.appendChild(field({ label: 'Pcap path (relative to the TRex dir)', tip: TB.help.cap2.pcapName, type: 'text', value: c.name,
           width: '230px', datalist: 'cap2-pcaps',
           onChange: function (v) { c.name = v || ''; renderList(); regen(); } }));
         var browse = TB.ui.pcapBrowseButton('cap2', function (dir, file) {
@@ -239,19 +240,19 @@
           renderList(); renderEditor(); regen();
         });
         if (browse) { r1.appendChild(browse); }
-        r1.appendChild(field({ label: 'cps', type: 'float', value: c.cps, width: '70px',
+        r1.appendChild(field({ label: 'cps', tip: TB.help.cap2.cps, type: 'float', value: c.cps, width: '70px',
           onChange: function (v) { c.cps = v === null ? 1 : v; renderList(); regen(); } }));
-        r1.appendChild(field({ label: 'ipg (µs)', type: 'int', value: c.ipg, width: '80px',
+        r1.appendChild(field({ label: 'ipg (µs)', tip: TB.help.cap2.ipg, type: 'int', value: c.ipg, width: '80px',
           onChange: function (v) { c.ipg = v === null ? 10000 : v; regen(); } }));
-        r1.appendChild(field({ label: 'rtt (µs)', type: 'int', value: c.rtt, width: '80px',
+        r1.appendChild(field({ label: 'rtt (µs)', tip: TB.help.cap2.rtt, type: 'int', value: c.rtt, width: '80px',
           onChange: function (v) { c.rtt = v === null ? 10000 : v; regen(); } }));
-        r1.appendChild(field({ label: 'w (weight)', type: 'int', value: c.w, width: '60px',
+        r1.appendChild(field({ label: 'w (weight)', tip: TB.help.cap2.w, type: 'int', value: c.w, width: '60px',
           onChange: function (v) { c.w = v === null ? 1 : v; regen(); } }));
         box.appendChild(r1);
         var r2 = el('div', { class: 'field-row' });
-        r2.appendChild(field({ label: 'limit (max active flows, opt.)', type: 'int', value: c.limit, width: '90px',
+        r2.appendChild(field({ label: 'limit (max active flows, opt.)', tip: TB.help.cap2.limit, type: 'int', value: c.limit, width: '90px',
           onChange: function (v) { c.limit = v; regen(); } }));
-        r2.appendChild(field({ label: 'plugin_id', type: 'select',
+        r2.appendChild(field({ label: 'plugin_id', tip: TB.help.cap2.pluginId, type: 'select',
           value: c.plugin_id === null || c.plugin_id === undefined ? '' : String(c.plugin_id),
           options: [{ value: '', label: '(none)' }, { value: '4', label: '4 - HTTP' }, { value: '5', label: '5 - DHCP' }],
           onChange: function (v) { c.plugin_id = v === '' ? null : parseInt(v, 10); regen(); } }));
@@ -261,16 +262,16 @@
         var dynBox = el('div', {});
         (c.dynPyload || []).forEach(function (d, i) {
           var dr = el('div', { class: 'vm-var-row' });
-          dr.appendChild(field({ label: 'pkt_id', type: 'int', value: d.pktId, width: '55px',
+          dr.appendChild(field({ label: 'pkt_id', tip: TB.help.cap2.dynPktId, type: 'int', value: d.pktId, width: '55px',
             onChange: function (v) { d.pktId = v === null ? 1 : v; regen(); } }));
-          dr.appendChild(field({ label: 'pyld_offset', type: 'int', value: d.pyldOffset, width: '75px',
+          dr.appendChild(field({ label: 'pyld_offset', tip: TB.help.cap2.dynOffset, type: 'int', value: d.pyldOffset, width: '75px',
             onChange: function (v) { d.pyldOffset = v === null ? 0 : v; regen(); } }));
-          dr.appendChild(field({ label: 'type', type: 'select', value: String(d.type),
+          dr.appendChild(field({ label: 'type', tip: TB.help.cap2.dynType, type: 'select', value: String(d.type),
             options: [{ value: '0', label: '0 - random' }, { value: '1', label: '1 - client_ip' }],
             onChange: function (v) { d.type = parseInt(v, 10); regen(); } }));
-          dr.appendChild(field({ label: 'len (uint32s)', type: 'int', value: d.len, width: '70px',
+          dr.appendChild(field({ label: 'len (uint32s)', tip: TB.help.cap2.dynLen, type: 'int', value: d.len, width: '70px',
             onChange: function (v) { d.len = v === null ? 1 : v; regen(); } }));
-          dr.appendChild(field({ label: 'mask (hex)', type: 'text', value: d.mask, width: '95px',
+          dr.appendChild(field({ label: 'mask (hex)', tip: TB.help.cap2.dynMask, type: 'text', value: d.mask, width: '95px',
             validate: function (v) { return /^0x[0-9a-fA-F]+$/.test(v) ? null : 'expect hex like 0xffffffff'; },
             onChange: function (v) { d.mask = v || '0xffffffff'; regen(); } }));
           dr.appendChild(el('button', { class: 'btn btn-small btn-danger', text: '✕',
@@ -291,14 +292,14 @@
       function renderEditor() {
         editorPane.innerHTML = '';
         editorPane.appendChild(el('div', { class: 'pane-title', text: 'Profile' }));
-        editorPane.appendChild(TB.ui.section('Generator (IP ranges & tuple pool)', generatorSection(), true));
-        editorPane.appendChild(TB.ui.section('Global replay flags (cap_ipg / vlan / mac override)', flagsSection(), false));
+        editorPane.appendChild(TB.ui.section('Generator (IP ranges & tuple pool)', generatorSection(), true, TB.help.cap2._sections.generator));
+        editorPane.appendChild(TB.ui.section('Global replay flags (cap_ipg / vlan / mac override)', flagsSection(), false, TB.help.cap2._sections.flags));
         var c = model.capInfo[selectedIdx];
         if (!c) {
           editorPane.appendChild(el('div', { class: 'output-empty', text: 'No pcap template selected. Add one on the left.' }));
           return;
         }
-        editorPane.appendChild(TB.ui.section('Pcap template: ' + (c.name || '?').split('/').pop(), capEditor(c), true));
+        editorPane.appendChild(TB.ui.section('Pcap template: ' + (c.name || '?').split('/').pop(), capEditor(c), true, TB.help.cap2._sections.cap));
       }
 
       function renderAll() {

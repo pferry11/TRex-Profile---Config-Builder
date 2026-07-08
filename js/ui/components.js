@@ -83,8 +83,13 @@
     if (opts.width) { input.style.width = opts.width; }
     if (opts.disabled) { input.disabled = true; }
 
+    var labelEl = el('span', { class: 'field-label', text: opts.label || '' });
+    if (opts.tip) {
+      labelEl.appendChild(el('span', { class: 'tip-icon', text: 'ⓘ', 'data-tip': opts.tip }));
+      input.title = opts.tip;
+    }
     var wrap = el('label', { class: 'field' + (opts.type === 'checkbox' ? ' field-check' : '') }, [
-      el('span', { class: 'field-label', text: opts.label || '' }),
+      labelEl,
       input,
       opts.hint ? el('span', { class: 'field-hint', text: opts.hint }) : null,
       err
@@ -93,7 +98,7 @@
     return wrap;
   };
 
-  TB.ui.section = function (title, body, open) {
+  TB.ui.section = function (title, body, open, tip) {
     var el = TB.ui.el;
     var caret = el('span', { class: 'caret', text: open === false ? '▸' : '▾' });
     var content = el('div', { class: 'section-body' }, [body]);
@@ -105,7 +110,9 @@
         content.style.display = vis ? 'none' : '';
         caret.textContent = vis ? '▸' : '▾';
       }
-    }, [caret, el('span', { text: title })]);
+    }, [caret, el('span', { text: title }),
+        tip ? el('span', { class: 'tip-icon', text: 'ⓘ', 'data-tip': tip,
+          onclick: function (e) { e.stopPropagation(); } }) : null]);
     return el('div', { class: 'section' }, [head, content]);
   };
 

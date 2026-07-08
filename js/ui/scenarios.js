@@ -65,7 +65,7 @@
         function render() {
           body.innerHTML = '';
           var r1 = el('div', { class: 'field-row' });
-          r1.appendChild(field({ label: 'Mechanism', type: 'select', value: o.mode,
+          r1.appendChild(field({ label: 'Mechanism', tip: TB.help.scenarios.mechanismTwoServer, type: 'select', value: o.mode,
             options: [
               { value: 'astf', label: 'ASTF client/server split (recommended)' },
               { value: 'stl', label: 'STL unidirectional (TX + raw RX counters)' }
@@ -76,9 +76,9 @@
           body.appendChild(r1);
 
           var r2 = el('div', { class: 'field-row' });
-          r2.appendChild(field({ label: 'Sender box (client side)', type: 'text', value: o.senderHost, width: '130px',
+          r2.appendChild(field({ label: 'Sender box (client side)', tip: TB.help.scenarios.senderHost, type: 'text', value: o.senderHost, width: '130px',
             onChange: function (v) { o.senderHost = v || ''; } }));
-          r2.appendChild(field({ label: 'Receiver box (server side)', type: 'text', value: o.receiverHost, width: '130px',
+          r2.appendChild(field({ label: 'Receiver box (server side)', tip: TB.help.scenarios.receiverHost, type: 'text', value: o.receiverHost, width: '130px',
             onChange: function (v) { o.receiverHost = v || ''; } }));
           r2.appendChild(field({ label: 'Cores (-c)', type: 'int', value: o.cores, width: '60px',
             onChange: function (v) { o.cores = v === null ? 4 : v; } }));
@@ -103,9 +103,9 @@
                 datalist: 'avl-pcaps',
                 onChange: function (v) { o.pcapFile = v || ''; } }));
             }
-            r4.appendChild(field({ label: 'cps (at -m 1)', type: 'float', value: o.rate, width: '80px',
+            r4.appendChild(field({ label: 'cps (at -m 1)', tip: TB.help.astf.cps, type: 'float', value: o.rate, width: '80px',
               onChange: function (v) { o.rate = v === null ? 1 : v; } }));
-            r4.appendChild(field({ label: 'rampup_sec (opt.)', type: 'int', value: o.rampupSec, width: '90px',
+            r4.appendChild(field({ label: 'rampup_sec (opt.)', tip: TB.help.astf.rampupSec, type: 'int', value: o.rampupSec, width: '90px',
               onChange: function (v) { o.rampupSec = v; } }));
           } else {
             r4.appendChild(field({ label: 'pps', type: 'float', value: o.rate, width: '90px',
@@ -127,7 +127,7 @@
           body.appendChild(resBox);
         }
         render();
-        wrap.appendChild(TB.ui.section('Scenario: two servers — one sends, one receives', body, true));
+        wrap.appendChild(TB.ui.section('Scenario: two servers — one sends, one receives', body, true, TB.help.scenarios._sections.twoServer));
       })();
 
       /* ================= Wizard B: connection ramp ================= */
@@ -160,13 +160,13 @@
             onChange: function (v) { o.mid = v === null ? 0 : v; } }));
           r2.appendChild(field({ label: 'High (' + unit + ')', type: 'float', value: o.high, width: '80px',
             onChange: function (v) { o.high = v === null ? 0 : v; } }));
-          r2.appendChild(field({ label: 'Stage duration (sec)', type: 'int', value: o.stageSec, width: '80px',
+          r2.appendChild(field({ label: 'Stage duration (sec)', tip: TB.help.scenarios.stageSec, type: 'int', value: o.stageSec, width: '80px',
             onChange: function (v) { o.stageSec = v === null ? 0 : v; } }));
           body.appendChild(r2);
 
           var r3 = el('div', { class: 'field-row' });
           if (o.engine === 'astf') {
-            r3.appendChild(field({ label: 'Mechanism', type: 'select', value: o.mechanism,
+            r3.appendChild(field({ label: 'Mechanism', tip: TB.help.scenarios.rampMechanism, type: 'select', value: o.mechanism,
               options: [
                 { value: 'm_step', label: '-m stepping runbook - discrete plateaus (default)' },
                 { value: 'rampup', label: 'scheduler.rampup_sec - smooth linear ramp' },
@@ -195,7 +195,7 @@
           body.appendChild(resBox);
         }
         render();
-        wrap.appendChild(TB.ui.section('Scenario: connection ramp — low → mid → high', body, true));
+        wrap.appendChild(TB.ui.section('Scenario: connection ramp — low → mid → high', body, true, TB.help.scenarios._sections.ramp));
       })();
     }
   };
