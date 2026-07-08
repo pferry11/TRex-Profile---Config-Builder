@@ -1,5 +1,7 @@
 # TRex Profile & Config Builder
 
+**App version 0.14.0** · Target: TRex v3.06
+
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
 
@@ -46,8 +48,12 @@ generators (48 tests). No toolchain needed.
 
 ## Notes
 
+- **App version** lives in `TB.APP_VERSION` (`js/app.js`) and shows in the
+  header; bump the minor number with each feature release.
 - Targets **TRex v3.06**; the generator registry is version-keyed so newer
-  TRex versions can be added later without a rewrite (see `docs/DESIGN.md`).
+  TRex versions can be added later without a rewrite — the Manual tab's
+  **Future updates** chapter documents the exact steps, plus a roadmap of
+  candidate improvements.
 - Manual screenshots regenerate with `powershell -File tools\screenshots.ps1`
   (headless Edge) whenever the UI changes.
 - Design and the phased build prompts used to create this app live in

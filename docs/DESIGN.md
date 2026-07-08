@@ -1,8 +1,10 @@
 # TRex Profile & Config Builder — Design Document
 
-**Status:** Planning complete — ready to build via the phased prompts in [BUILD_PROMPTS.md](BUILD_PROMPTS.md)
+**Status:** BUILT — all phases (1A–6) implemented; this document is the design reference.
+See the app's Manual tab ("Future updates" chapter) for the improvement roadmap and the
+step-by-step guide to adding new TRex versions.
 **Target TRex version:** 3.06 (architecture is version-aware; 3.07/3.08 can be added later — see §7)
-**Date:** 2026-07-06
+**Designed:** 2026-07-06 · **Built:** 2026-07-06 → 2026-07-08 (app v0.14.0)
 
 ---
 

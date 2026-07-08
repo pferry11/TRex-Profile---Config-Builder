@@ -3,6 +3,9 @@
   'use strict';
   var TB = root.TB = root.TB || {};
 
+  /* App version - bump the minor number with each feature release (commit batch). */
+  TB.APP_VERSION = '0.14.0';
+
   var TABS = [
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },
     { id: 'astf', label: 'ASTF Profile', mount: function (c) { TB.ui.astfBuilder.mount(c); } },
@@ -32,7 +35,7 @@
     var header = el('div', { class: 'app-header' });
     header.appendChild(el('div', { class: 'app-title' }, [
       el('span', { text: 'TRex Profile & Config Builder' }),
-      el('span', { class: 'app-badge', text: 'target v' + TB.settings.get().defaults.trexVersion })
+      el('span', { class: 'app-badge', text: 'Target TRex v' + TB.settings.get().defaults.trexVersion })
     ]));
 
     var wsActions = el('div', { class: 'ws-actions' });
@@ -68,6 +71,10 @@
     wsActions.appendChild(el('button', {
       class: 'btn btn-secondary', text: 'Import workspace',
       onclick: function () { importInput.click(); }
+    }));
+    wsActions.appendChild(el('span', {
+      class: 'app-version', text: 'app v' + TB.APP_VERSION,
+      title: 'TRex Profile & Config Builder version'
     }));
     header.appendChild(wsActions);
     app.appendChild(header);
