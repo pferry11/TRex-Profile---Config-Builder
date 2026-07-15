@@ -150,8 +150,21 @@
             if (match) {
               arg = 'len(' + match.name + ')';
             } else {
-              arg = py.num(c.bytes);
-              warnings.push(ctx + ': recv(' + c.bytes + ') does not match any peer send length.');
+              /* peer sends one buffer in a loop (http_eflow pattern): an exact
+               * multiple of a peer send length is emitted as len(buf) * N */
+              var mult = null;
+              for (j = 0; j < peerSends.length; j++) {
+                if (peerSends[j].len > 0 && c.bytes % peerSends[j].len === 0) {
+                  mult = { entry: peerSends[j], n: c.bytes / peerSends[j].len };
+                  break;
+                }
+              }
+              if (mult) {
+                arg = 'len(' + mult.entry.name + ') * ' + mult.n;
+              } else {
+                arg = py.num(c.bytes);
+                warnings.push(ctx + ': recv(' + c.bytes + ') does not match any peer send length.');
+              }
             }
           }
           lines.push(indent + progVar + '.recv(' + arg + ')');

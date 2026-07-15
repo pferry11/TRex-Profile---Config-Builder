@@ -56,6 +56,114 @@
     return { file: '../avl/delay_10_http_browsing_0.pcap', cps: 2.776, port: null, sDelayUsec: null, ipGenOverride: null };
   }
 
+  /* ---------- one-click presets ---------- */
+
+  function repeat(ch, n) { return new Array(n + 1).join(ch); }
+
+  var SIP_INVITE = 'INVITE sip:bob@example.com SIP/2.0\r\nVia: SIP/2.0/UDP 16.0.0.1:5060\r\n' +
+    'From: <sip:alice@example.com>\r\nTo: <sip:bob@example.com>\r\nCall-ID: 1@16.0.0.1\r\n' +
+    'CSeq: 1 INVITE\r\nContent-Length: 0\r\n\r\n';
+  var SIP_OK = 'SIP/2.0 200 OK\r\nVia: SIP/2.0/UDP 16.0.0.1:5060\r\n' +
+    'From: <sip:alice@example.com>\r\nTo: <sip:bob@example.com>\r\nCall-ID: 1@16.0.0.1\r\n' +
+    'CSeq: 1 INVITE\r\nContent-Length: 0\r\n\r\n';
+  var SIP_ACK = 'ACK sip:bob@example.com SIP/2.0\r\nVia: SIP/2.0/UDP 16.0.0.1:5060\r\n' +
+    'From: <sip:alice@example.com>\r\nTo: <sip:bob@example.com>\r\nCall-ID: 1@16.0.0.1\r\n' +
+    'CSeq: 1 ACK\r\nContent-Length: 0\r\n\r\n';
+
+  function presetTemplate(over) {
+    var t = defaultTemplate(1);
+    for (var k in over) { t[k] = over[k]; }
+    return t;
+  }
+
+  /* Each preset mutates the model in place; the caller re-renders. */
+  var PRESETS = [
+    { label: 'DNS', title: 'One UDP template: 33-byte query, server answers - the classic high-cps small-flow test.',
+      apply: function (model) {
+        model.mode = 'program';
+        model.templates = [presetTemplate({ tgName: 'dns', cps: 30, assocPort: 53, stream: false,
+          client: { commands: [
+            { op: 'send_msg', payload: { kind: 'text', text: 'dns-query: www.example.com type A' } },
+            { op: 'recv_msg', count: 1 }
+          ] },
+          server: { commands: [
+            { op: 'recv_msg', count: 1 },
+            { op: 'send_msg', payload: { kind: 'text', text: 'dns-response: www.example.com A 48.0.0.1 ttl 300' } }
+          ] } })];
+      } },
+    { label: 'SIP', title: 'UDP INVITE / 200 OK / ACK handshake on port 5060.',
+      apply: function (model) {
+        model.mode = 'program';
+        model.templates = [presetTemplate({ tgName: 'sip', cps: 5, assocPort: 5060, stream: false,
+          client: { commands: [
+            { op: 'send_msg', payload: { kind: 'text', text: SIP_INVITE } },
+            { op: 'recv_msg', count: 1 },
+            { op: 'send_msg', payload: { kind: 'text', text: SIP_ACK } }
+          ] },
+          server: { commands: [
+            { op: 'recv_msg', count: 1 },
+            { op: 'send_msg', payload: { kind: 'text', text: SIP_OK } },
+            { op: 'recv_msg', count: 1 }
+          ] } })];
+      } },
+    { label: 'RTP', title: 'UDP media stream: 50 x 160-byte packets at 20 ms spacing (one talkspurt).',
+      apply: function (model) {
+        model.mode = 'program';
+        model.templates = [presetTemplate({ tgName: 'rtp', cps: 2, assocPort: 5004, stream: false,
+          client: { commands: [
+            { op: 'set_var', id: 'var1', value: 50 },
+            { op: 'set_label', name: 'a:' },
+            { op: 'send_msg', payload: { kind: 'text', text: repeat('x', 160) } },
+            { op: 'delay', usec: 20000 },
+            { op: 'jmp_nz', id: 'var1', label: 'a:' }
+          ] },
+          server: { commands: [
+            { op: 'recv_msg', count: 50 }
+          ] } })];
+      } },
+    { label: 'Enterprise mix (SFR)', title: 'SFR-style multi-pcap enterprise mix: browsing, mail, oracle, citrix, DNS... Rates are representative - tune per test.',
+      apply: function (model) {
+        model.mode = 'pcap';
+        model.capList = [
+          ['../avl/delay_10_http_browsing_0.pcap', 8.98],
+          ['../avl/delay_10_http_get_0.pcap', 2.77],
+          ['../avl/delay_10_http_post_0.pcap', 1.05],
+          ['../avl/delay_10_https_0.pcap', 1.36],
+          ['../avl/delay_10_exchange_0.pcap', 3.99],
+          ['../avl/delay_10_mail_pop_0.pcap', 1.2],
+          ['../avl/delay_10_smtp_0.pcap', 0.57],
+          ['../avl/delay_10_oracle_0.pcap', 6.66],
+          ['../avl/delay_10_citrix_0.pcap', 1.68],
+          ['../avl/delay_dns_0.pcap', 33.2]
+        ].map(function (row) {
+          return { file: row[0], cps: row[1], port: null, sDelayUsec: null, ipGenOverride: null };
+        });
+      } },
+    { label: 'Elephant flow', title: 'Throughput soak (http_eflow.py pattern): one keep-alive connection, server loops 100 x 64 KB sends; big TCP buffers.',
+      apply: function (model) {
+        var body = 65536;
+        var loop = 100;
+        var chunkLen = TB.gen.astfHttpResponseHeader(body).length + body;
+        model.mode = 'program';
+        model.templates = [presetTemplate({ tgName: 'eflow', cps: 1, assocPort: 80, stream: true,
+          client: { commands: [
+            { op: 'send', payload: { kind: 'httpRequest' } },
+            { op: 'recv', bytes: chunkLen * loop }
+          ] },
+          server: { commands: [
+            { op: 'recv', bytes: null },
+            { op: 'set_var', id: 'var1', value: loop },
+            { op: 'set_label', name: 'a:' },
+            { op: 'send', payload: { kind: 'httpResponse', bodyBytes: body } },
+            { op: 'jmp_nz', id: 'var1', label: 'a:' }
+          ] } })];
+        model.globals.client.tcp.rxbufsize = 262144;
+        model.globals.client.tcp.txbufsize = 262144;
+        model.globals.server.tcp.rxbufsize = 262144;
+        model.globals.server.tcp.txbufsize = 262144;
+      } }
+  ];
+
   function sideGlobals() {
     return {
       tcp: { mss: null, rxbufsize: null, txbufsize: null, initwnd: null, no_delay: null,
@@ -95,11 +203,31 @@
       TB.ui.ensurePcapDatalist();
 
       var topbar = el('div', { class: 'builder-topbar' });
+      var presetBox = el('div', { class: 'tunables-box' });
       var listPane = el('div', { class: 'pane pane-list' });
       var editorPane = el('div', { class: 'pane pane-editor' });
       var outputPane = el('div', { class: 'pane pane-output' });
       container.appendChild(topbar);
+      container.appendChild(presetBox);
       container.appendChild(el('div', { class: 'builder-panes' }, [listPane, editorPane, outputPane]));
+
+      function renderPresets() {
+        presetBox.innerHTML = '';
+        var body = el('div', { class: 'field-row' });
+        body.appendChild(el('span', { class: 'field-label', text: 'One click loads a ready-to-run profile (replaces the current entries):' }));
+        PRESETS.forEach(function (pre) {
+          body.appendChild(el('button', { class: 'btn btn-small', text: pre.label, title: pre.title,
+            onclick: function () {
+              if (!confirm('Load the ' + pre.label + ' preset? It replaces the current ' +
+                           (model.mode === 'pcap' ? 'pcap entries' : 'templates') + '.')) { return; }
+              pre.apply(model);
+              selectedIdx = 0;
+              renderAll();
+              TB.ui.toast('Loaded ' + pre.label + ' preset', 'ok');
+            } }));
+        });
+        presetBox.appendChild(TB.ui.section('L7 presets', body, false, TB.help.astf._sections.presets));
+      }
 
       function items() { return model.mode === 'pcap' ? model.capList : model.templates; }
 
@@ -506,6 +634,7 @@
 
       function renderAll() {
         renderTopbar();
+        renderPresets();
         renderList();
         renderEditor();
         regen();

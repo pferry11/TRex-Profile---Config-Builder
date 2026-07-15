@@ -106,6 +106,78 @@ var fxLatency = (function () {
   return model('latency_stream', [s]);
 })();
 
+var fxPacketLayers = (function () {
+  var s0 = baseStream();                       /* ICMP echo request on IPv4 */
+  s0.packet.l4 = { type: 'icmp', sport: 1025, dport: 12, tcpFlags: null, icmpKind: 'echo-request', icmpId: 7, icmpSeq: 1 };
+  var s1 = baseStream();                       /* IPv4 later-fragment UDP */
+  s1.id = 's2'; s1.name = 'S1';
+  s1.packet.l3.fragOffset = 185;
+  s1.packet.l3.moreFrags = true;
+  var s2 = baseStream();                       /* IPv6 + fragment ext header UDP */
+  s2.id = 's3'; s2.name = 'S2';
+  s2.packet.l3 = { type: 'ipv6', src: '2001:db8::1', dst: '2001:db8::2', tos: null, ttl: null, ext: 'frag' };
+  s2.packet.payload.frameSize = 100;
+  var s3 = baseStream();                       /* ICMPv6 echo reply */
+  s3.id = 's4'; s3.name = 'S3';
+  s3.packet.l3 = { type: 'ipv6', src: '2001:db8::1', dst: '2001:db8::2', tos: null, ttl: null };
+  s3.packet.l4 = { type: 'icmp', sport: 1025, dport: 12, tcpFlags: null, icmpKind: 'echo-reply', icmpId: null, icmpSeq: null };
+  return model('packet_layers', [s0, s1, s2, s3]);
+})();
+
+var fxTunnels = (function () {
+  function tunnel(over) {
+    var t = { type: 'none', outerSrc: '10.0.0.1', outerDst: '10.0.0.2', vni: 5000,
+              label: 100, mplsTtl: null, outerVlanId: 100, spi: 42, si: 1 };
+    for (var k in over) { t[k] = over[k]; }
+    return t;
+  }
+  var s0 = baseStream();
+  s0.packet.tunnel = tunnel({ type: 'vxlan' });
+  s0.packet.payload.frameSize = 150;
+  var s1 = baseStream();
+  s1.id = 's2'; s1.name = 'S1';
+  s1.packet.tunnel = tunnel({ type: 'gre' });
+  s1.packet.payload.frameSize = 100;
+  var s2 = baseStream();
+  s2.id = 's3'; s2.name = 'S2';
+  s2.packet.tunnel = tunnel({ type: 'mpls' });
+  var s3 = baseStream();
+  s3.id = 's4'; s3.name = 'S3';
+  s3.packet.tunnel = tunnel({ type: 'qinq' });
+  s3.packet.vlan = { enabled: true, id: 200, prio: 0 };
+  var s4 = baseStream();
+  s4.id = 's5'; s4.name = 'S4';
+  s4.packet.tunnel = tunnel({ type: 'nsh' });
+  return model('tunnels', [s0, s1, s2, s3, s4]);
+})();
+
+var fxVmDeps = (function () {
+  var s = baseStream();
+  s.vm.vars = [
+    { name: 'ip_src', sizeBytes: 4, op: 'inc', min: '16.0.0.1', max: '16.0.0.254', step: 1,
+      nextVar: 'ip_dst', splitToCores: false, writeTo: 'IP.src', offsetFixup: 2, fixChecksum: true },
+    { name: 'ip_dst', sizeBytes: 4, op: 'inc', min: '48.0.0.1', max: '48.0.0.254', step: 1,
+      writeTo: 'IP.dst', fixChecksum: true }
+  ];
+  return model('vm_deps', [s]);
+})();
+
+var fxPcapReplay = (function () {
+  var m = model('pcap_replay', []);
+  m.pcapReplay = { enabled: true, file: 'cap2/dns.pcap', ipgUsec: 10, loopCount: 5, speedup: 1 };
+  return m;
+})();
+
+var fxRateUnits = (function () {
+  var s0 = baseStream();
+  s0.mode = { type: 'cont', rateUnit: 'bps_L2', pps: 1000000, totalPkts: null, pktsPerBurst: null, ibgUsec: null, count: null };
+  var s1 = baseStream();
+  s1.id = 's2'; s1.name = 'S1';
+  s1.packet.payload.frameSize = 1514;
+  s1.mode = { type: 'single_burst', rateUnit: 'percentage', pps: 25, totalPkts: 500, pktsPerBurst: null, ibgUsec: null, count: null };
+  return model('rate_units', [s0, s1]);
+})();
+
 /* ---------------- goldens (verified via Node + python compile) ---------------- */
 function summaryBlock(sentences) {
   if (!sentences || !sentences.length) { return ''; }
@@ -243,6 +315,209 @@ var goldenChained = HDR('burst_chain', sumChained) +
 'def register():\n' +
 '    return STLGenProfile()\n';
 
+var sumPacketLayers = [
+  'S0: transmits continuously at 100 pps - 64-byte ICMP echo-request frames 16.0.0.1 -> 48.0.0.1.',
+  'S1: transmits continuously at 100 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1 (IPv4 fragment).',
+  'S2: transmits continuously at 100 pps - 100-byte UDP frames 2001:db8::1 -> 2001:db8::2 (fragment ext header).',
+  'S3: transmits continuously at 100 pps - 64-byte ICMP echo-reply frames 2001:db8::1 -> 2001:db8::2.',
+  'Aggregate self-starting continuous rate: 400 pps at -m 1.'
+];
+
+var goldenPacketLayers = HDR('packet_layers', sumPacketLayers) +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+'\n' +
+'    def create_stream_1(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/ICMP(type=8,id=7,seq=1)\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S0',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(pps=100))\n' +
+'\n' +
+'    def create_stream_2(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1",flags="MF",frag=185)/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S1',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(pps=100))\n' +
+'\n' +
+'    def create_stream_3(self, args):\n' +
+'        base_pkt = Ether()/IPv6(src="2001:db8::1",dst="2001:db8::2")/IPv6ExtHdrFragment()/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, 100 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S2',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(pps=100))\n' +
+'\n' +
+'    def create_stream_4(self, args):\n' +
+'        base_pkt = Ether()/IPv6(src="2001:db8::1",dst="2001:db8::2")/ICMPv6EchoReply()\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S3',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(pps=100))\n' +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'        return [\n' +
+'            self.create_stream_1(args),\n' +
+'            self.create_stream_2(args),\n' +
+'            self.create_stream_3(args),\n' +
+'            self.create_stream_4(args),\n' +
+'        ]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+var sumTunnels = [
+  'S0: transmits continuously at 100 pps - 150-byte UDP frames 16.0.0.1 -> 48.0.0.1, VXLAN vni 5000 via 10.0.0.1 -> 10.0.0.2.',
+  'S1: transmits continuously at 100 pps - 100-byte UDP frames 16.0.0.1 -> 48.0.0.1, GRE tunnel 10.0.0.1 -> 10.0.0.2.',
+  'S2: transmits continuously at 100 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1, MPLS label 100.',
+  'S3: transmits continuously at 100 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1 on VLAN 200, QinQ outer VLAN 100.',
+  'S4: transmits continuously at 100 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1, NSH spi 42 si 1.',
+  'Aggregate self-starting continuous rate: 500 pps at -m 1.'
+];
+
+function tunnelStream(n, name, pktExpr, size) {
+  return '\n    def create_stream_' + n + '(self, args):\n' +
+'        base_pkt = ' + pktExpr + '\n' +
+"        pad = max(0, " + size + " - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='" + name + "',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(pps=100))\n';
+}
+
+var goldenTunnels = HDR('tunnels', sumTunnels) +
+'from trex_stl_lib.api import *\n' +
+'from scapy.contrib.mpls import MPLS\n' +
+'from scapy.contrib.nsh import NSH\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+tunnelStream(1, 'S0', 'Ether()/IP(src="10.0.0.1",dst="10.0.0.2")/UDP(sport=1025,dport=4789)/VXLAN(vni=5000)/Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)', 150) +
+tunnelStream(2, 'S1', 'Ether()/IP(src="10.0.0.1",dst="10.0.0.2")/GRE()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)', 100) +
+tunnelStream(3, 'S2', 'Ether()/MPLS(label=100)/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)', 64) +
+tunnelStream(4, 'S3', 'Ether()/Dot1AD(vlan=100)/Dot1Q(vlan=200)/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)', 64) +
+tunnelStream(5, 'S4', 'Ether()/NSH(spi=42,si=1)/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)', 64) +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'        return [\n' +
+'            self.create_stream_1(args),\n' +
+'            self.create_stream_2(args),\n' +
+'            self.create_stream_3(args),\n' +
+'            self.create_stream_4(args),\n' +
+'            self.create_stream_5(args),\n' +
+'        ]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+var sumVmDeps = [
+  'S0: transmits continuously at 100 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1; sweeps IP.src over 16.0.0.1-16.0.0.254 (steps ip_dst on wrap) (not split per core); sweeps IP.dst over 48.0.0.1-48.0.0.254.',
+  'Aggregate self-starting continuous rate: 100 pps at -m 1.'
+];
+
+var goldenVmDeps = HDR('vm_deps', sumVmDeps) +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+'\n' +
+'    def create_stream_1(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        vm = STLVM()\n' +
+'        vm.var(name="ip_src", min_value="16.0.0.1", max_value="16.0.0.254", size=4, op="inc", next_var="ip_dst", split_to_cores=False)\n' +
+'        vm.var(name="ip_dst", min_value="48.0.0.1", max_value="48.0.0.254", size=4, op="inc")\n' +
+'        vm.write(fv_name="ip_src", pkt_offset="IP.src", offset_fixup=2)\n' +
+'        vm.write(fv_name="ip_dst", pkt_offset="IP.dst")\n' +
+'        vm.fix_chksum()\n' +
+'        return STLStream(\n' +
+"            name='S0',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad, vm=vm),\n' +
+'            mode=STLTXCont(pps=100))\n' +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'        return [self.create_stream_1(args)]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+var sumPcapReplay = [
+  'Replays cap2/dns.pcap as stateless streams at 10 usec between packets, looped 5 times.',
+  'Override at load time with -t ipg_usec=...,loop_count=...'
+];
+
+var goldenPcapReplay = HDR('pcap_replay', sumPcapReplay) +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+"        parser.add_argument('--ipg_usec', type=float, default=10, help='usec between replayed packets (None = pcap timing)')\n" +
+"        parser.add_argument('--loop_count', type=int, default=5, help='times to replay the pcap (0 = forever)')\n" +
+'        args = parser.parse_args(tunables)\n' +
+"        return STLProfile.load_pcap('cap2/dns.pcap', ipg_usec=args.ipg_usec, loop_count=args.loop_count).get_streams()\n" +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
+var sumRateUnits = [
+  'S0: transmits continuously at 1000000 bps (L2) - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1.',
+  'S1: sends a single burst of 500 packets at 25% of line rate - 1514-byte UDP frames 16.0.0.1 -> 48.0.0.1.',
+  'Aggregate self-starting continuous rate: 1000000 bps (L2) at -m 1.'
+];
+
+var goldenRateUnits = HDR('rate_units', sumRateUnits) +
+'from trex_stl_lib.api import *\n' +
+'import argparse\n' +
+'\n\n' +
+'class STLGenProfile(object):\n' +
+'\n' +
+'    def create_stream_1(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, 64 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S0',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXCont(bps_L2=1000000))\n' +
+'\n' +
+'    def create_stream_2(self, args):\n' +
+'        base_pkt = Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)\n' +
+"        pad = max(0, 1514 - len(base_pkt)) * 'x'\n" +
+'        return STLStream(\n' +
+"            name='S1',\n" +
+'            packet=STLPktBuilder(pkt=base_pkt/pad),\n' +
+'            mode=STLTXSingleBurst(percentage=25, total_pkts=500))\n' +
+'\n' +
+'    def get_streams(self, tunables, **kwargs):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+'        args = parser.parse_args(tunables)\n' +
+'        return [\n' +
+'            self.create_stream_1(args),\n' +
+'            self.create_stream_2(args),\n' +
+'        ]\n' +
+'\n\n' +
+'def register():\n' +
+'    return STLGenProfile()\n';
+
 var goldenLatency = HDR('latency_stream', sumLatency) +
 'from trex_stl_lib.api import *\n' +
 'import argparse\n' +
@@ -297,6 +572,39 @@ goldenTest('golden: minimal cont UDP with size tunable (udp_1pkt_simple-like)', 
 goldenTest('golden: 3-stream IMIX with VM vars (imix-like)', fxImix, goldenImix, 'imix_like.py');
 goldenTest('golden: chained single-burst -> multi-burst (multi_burst_2st_1000pkt-like)', fxChained, goldenChained, 'burst_chain.py');
 goldenTest('golden: latency flow-stats with port_id pg_id (flow_stats_latency-like)', fxLatency, goldenLatency, 'latency_stream.py');
+goldenTest('golden: rate units bps_L2 cont + percentage single burst', fxRateUnits, goldenRateUnits, 'rate_units.py');
+goldenTest('golden: packet layers ICMP/ICMPv6, IPv4 frag, IPv6 ext header', fxPacketLayers, goldenPacketLayers, 'packet_layers.py');
+goldenTest('golden: tunnels VXLAN/GRE/MPLS/QinQ/NSH with contrib imports', fxTunnels, goldenTunnels, 'tunnels.py');
+goldenTest('golden: pcap replay via STLProfile.load_pcap (stl/pcap.py-like)', fxPcapReplay, goldenPcapReplay, 'pcap_replay.py');
+
+goldenTest('golden: VM dependent vars, offset fixup, split_to_cores=False', fxVmDeps, goldenVmDeps, 'vm_deps.py');
+
+test('warning: VM next_var references unknown variable', function () {
+  var m = JSON.parse(JSON.stringify(fxVmDeps));
+  m.streams[0].vm.vars[0].nextVar = 'no_such_var';
+  var r = gen(m, NOW);
+  var hit = r.warnings.some(function (w) { return w.indexOf('depends on unknown variable') !== -1; });
+  return { pass: hit, detail: hit ? '' : 'warnings: ' + r.warnings.join(' | ') };
+});
+
+test('pcap replay: warns when enabled streams are ignored', function () {
+  var m = JSON.parse(JSON.stringify(fxPcapReplay));
+  m.streams = [baseStream()];
+  var r = gen(m, NOW);
+  var hit = r.warnings.some(function (w) { return w.indexOf('Pcap replay is ON') === 0; });
+  return { pass: hit, detail: hit ? '' : 'warnings: ' + r.warnings.join(' | ') };
+});
+
+test('summary: mixed-unit aggregate groups per rate unit', function () {
+  var pctStream = baseStream();
+  pctStream.id = 's2'; pctStream.name = 'S1';
+  pctStream.mode = { type: 'cont', rateUnit: 'percentage', pps: 25, totalPkts: null, pktsPerBurst: null, ibgUsec: null, count: null };
+  var m = model('mixed_agg', [baseStream(), pctStream]);
+  var lines = TB.gen.summary(m);
+  var want = 'Aggregate self-starting continuous rate: 100 pps + 25% of line rate at -m 1.';
+  var got = lines.filter(function (l) { return l.indexOf('Aggregate') === 0; })[0];
+  return { pass: got === want, detail: got === want ? '' : 'got: ' + JSON.stringify(got) };
+});
 
 test('round-trip: model -> JSON -> parse -> regenerate identical', function () {
   var once = gen(fxImix, NOW).files[0].content;
@@ -578,6 +886,42 @@ astfContains('ASTF two weighted templates (template_groups-like)', fxAstfGroups,
   "template_2 = ASTFTemplate(client_template=temp_c_2, server_template=temp_s_2, tg_name='2x')",
   'templates=[template_1, template_2])'
 ]);
+
+var fxAstfEflow = (function () {
+  var body = 65536;
+  var loop = 100;
+  var chunkLen = TB.gen.astfHttpResponseHeader(body).length + body;
+  return astfModel('eflow_like', { mode: 'program', templates: [httpTemplate({
+    tgName: 'eflow', cps: 1,
+    client: { commands: [
+      { op: 'send', payload: { kind: 'httpRequest' } },
+      { op: 'recv', bytes: chunkLen * loop }
+    ] },
+    server: { commands: [
+      { op: 'recv', bytes: null },
+      { op: 'set_var', id: 'var1', value: loop },
+      { op: 'set_label', name: 'a:' },
+      { op: 'send', payload: { kind: 'httpResponse', bodyBytes: body } },
+      { op: 'jmp_nz', id: 'var1', label: 'a:' }
+    ] }
+  })] });
+})();
+
+astfContains('ASTF elephant flow: looped sends + recv len(buf) * N (http_eflow-like)', fxAstfEflow, [
+  'prog_c.recv(len(http_response) * 100)',
+  'prog_s.set_var("var1", 100)',
+  'prog_s.set_label("a:")',
+  'prog_s.send(http_response)',
+  'prog_s.jmp_nz("var1", "a:")'
+]);
+
+test('ASTF warning: recv still warns when not a multiple of any peer send', function () {
+  var m = JSON.parse(JSON.stringify(fxAstfEflow));
+  m.templates[0].client.commands[1].bytes = 12345;
+  var r = agen(m, NOW);
+  var hit = r.warnings.some(function (w) { return w.indexOf('does not match any peer send length') !== -1; });
+  return { pass: hit, detail: hit ? '' : 'warnings: ' + r.warnings.join(' | ') };
+});
 
 astfContains('ASTF UDP program (stream=False, send_msg/recv_msg)', fxAstfUdp, [
   'prog_c = ASTFProgram(stream=False)',

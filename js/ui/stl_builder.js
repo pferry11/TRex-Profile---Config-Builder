@@ -13,11 +13,15 @@
       packet: {
         l2: { srcMac: null, dstMac: null },
         vlan: { enabled: false, id: 100, prio: 0 },
-        l3: { type: 'ipv4', src: '16.0.0.1', dst: '48.0.0.1', tos: null, ttl: null },
-        l4: { type: 'udp', sport: 1025, dport: 12, tcpFlags: null },
+        l3: { type: 'ipv4', src: '16.0.0.1', dst: '48.0.0.1', tos: null, ttl: null,
+              fragOffset: null, moreFrags: false, ext: 'none' },
+        l4: { type: 'udp', sport: 1025, dport: 12, tcpFlags: null,
+              icmpKind: 'echo-request', icmpId: null, icmpSeq: null },
+        tunnel: { type: 'none', outerSrc: '10.0.0.1', outerDst: '10.0.0.2', vni: 5000,
+                  label: 100, mplsTtl: null, outerVlanId: 100, spi: 42, si: 1 },
         payload: { mode: 'pad', frameSize: 64, frameSizeTunable: null, fill: 'x', rawScapy: null }
       },
-      mode: { type: 'cont', pps: 100, totalPkts: 1000, pktsPerBurst: 4, ibgUsec: 1000000, count: 5 },
+      mode: { type: 'cont', rateUnit: 'pps', pps: 100, totalPkts: 1000, pktsPerBurst: 4, ibgUsec: 1000000, count: 5 },
       isgUsec: 0,
       chain: { selfStart: true, next: null, actionCount: null },
       vm: { cacheSize: null, vars: [], tuple: null },
@@ -32,11 +36,34 @@
       trexVersion: TB.settings.get().defaults.trexVersion,
       meta: { name: 'my_stl_profile', description: '', modified: '' },
       tunables: [],
+      pcapReplay: { enabled: false, file: 'cap2/dns.pcap', ipgUsec: 10, loopCount: 5, speedup: 1 },
       streams: [defaultStream(0)]
     };
   }
 
   var WRITE_TARGETS = ['IP.src', 'IP.dst', 'UDP.sport', 'UDP.dport', 'IP.tos'];
+
+  var RATE_UNITS = [
+    { value: 'pps', label: 'pps', short: 'pps' },
+    { value: 'bps_L1', label: 'bps L1', short: 'bps L1' },
+    { value: 'bps_L2', label: 'bps L2', short: 'bps L2' },
+    { value: 'percentage', label: '% line rate', short: '% line' }
+  ];
+
+  function rateUnitShort(unit) {
+    for (var i = 0; i < RATE_UNITS.length; i++) {
+      if (RATE_UNITS[i].value === unit) { return RATE_UNITS[i].short; }
+    }
+    return 'pps';
+  }
+
+  /* Classic IMIX table matching the shipped stl/imix.py: 60/590/1514 B at a
+   * 28:16:4 pps ratio, staggered isg, with src/dst IP sweeps. */
+  var IMIX_TABLE = [
+    { size: 60, pps: 28, isg: 0 },
+    { size: 590, pps: 16, isg: 0.1 },
+    { size: 1514, pps: 4, isg: 0.2 }
+  ];
 
   TB.ui.stlBuilder = {
     mount: function (container) {
@@ -50,11 +77,13 @@
       /* ---------- layout skeleton ---------- */
       var topbar = el('div', { class: 'builder-topbar' });
       var tunablesBox = el('div', { class: 'tunables-box' });
+      var pcapBox = el('div', { class: 'tunables-box' });
       var listPane = el('div', { class: 'pane pane-list' });
       var editorPane = el('div', { class: 'pane pane-editor' });
       var outputPane = el('div', { class: 'pane pane-output' });
       container.appendChild(topbar);
       container.appendChild(tunablesBox);
+      container.appendChild(pcapBox);
       container.appendChild(el('div', { class: 'builder-panes' }, [listPane, editorPane, outputPane]));
 
       function selected() {
@@ -215,6 +244,45 @@
         tunablesBox.appendChild(TB.ui.section('Tunables (' + model.tunables.length + ') — become --args of get_streams', body, model.tunables.length > 0, TB.help.stl._sections.tunables));
       }
 
+      /* ---------- pcap replay (STLProfile.load_pcap) ---------- */
+      function renderPcap() {
+        pcapBox.innerHTML = '';
+        if (!model.pcapReplay) {   /* models saved before this feature */
+          model.pcapReplay = { enabled: false, file: 'cap2/dns.pcap', ipgUsec: 10, loopCount: 5, speedup: 1 };
+        }
+        var r = model.pcapReplay;
+        TB.ui.ensureCap2Datalist();
+        var body = el('div', {});
+        var row = el('div', { class: 'field-row' });
+        row.appendChild(field({ label: 'Replay a pcap instead of the stream list', tip: TB.help.stl.pcapReplayOn,
+          type: 'checkbox', value: r.enabled,
+          onChange: function (v) { r.enabled = v; renderPcap(); regen(); } }));
+        if (r.enabled) {
+          row.appendChild(field({ label: 'Pcap file (path on the TRex box)', tip: TB.help.stl.pcapReplayFile, type: 'text',
+            value: r.file, width: '250px', datalist: 'cap2-pcaps',
+            onChange: function (v) { r.file = v || ''; regen(); } }));
+          var browse = TB.ui.pcapBrowseButton('cap2', function (dir, file) {
+            r.file = dir + '/' + file;
+            renderPcap(); regen();
+          });
+          if (browse) { row.appendChild(browse); }
+          row.appendChild(field({ label: 'IPG µs (empty = pcap timing)', tip: TB.help.stl.pcapReplayIpg, type: 'float',
+            value: r.ipgUsec, width: '90px',
+            onChange: function (v) { r.ipgUsec = v; renderPcap(); regen(); } }));
+          if (r.ipgUsec === null || r.ipgUsec === undefined || r.ipgUsec === '') {
+            row.appendChild(field({ label: 'Speedup', tip: TB.help.stl.pcapReplaySpeedup, type: 'float',
+              value: r.speedup, width: '70px',
+              onChange: function (v) { r.speedup = v === null ? 1 : v; regen(); } }));
+          }
+          row.appendChild(field({ label: 'Loop count (0 = forever)', tip: TB.help.stl.pcapReplayLoop, type: 'int',
+            value: r.loopCount, width: '80px',
+            onChange: function (v) { r.loopCount = v === null ? 1 : v; regen(); } }));
+        }
+        body.appendChild(row);
+        pcapBox.appendChild(TB.ui.section('Pcap replay (STLProfile.load_pcap)' + (r.enabled ? ' — ACTIVE, stream list ignored' : ''),
+          body, r.enabled, TB.help.stl._sections.pcapReplay));
+      }
+
       /* ---------- stream list ---------- */
       function renderList() {
         listPane.innerHTML = '';
@@ -230,7 +298,7 @@
           row.appendChild(check);
           row.appendChild(el('div', { class: 'stream-name' }, [
             el('div', { text: s.name }),
-            el('small', { text: s.mode.type + ' @ ' + s.mode.pps + ' pps' })
+            el('small', { text: s.mode.type + ' @ ' + s.mode.pps + ' ' + rateUnitShort(s.mode.rateUnit) })
           ]));
           var btns = el('div', { class: 'stream-btns' });
           function sbtn(label, title, fn) {
@@ -273,6 +341,30 @@
             selectedId = s.id;
             renderList(); renderEditor(); regen();
           } }));
+        listPane.appendChild(el('button', {
+          class: 'btn btn-secondary', text: 'IMIX preset',
+          title: 'Replace streams with the classic 60/590/1514 B IMIX table (28/16/4 pps, IP sweeps)',
+          onclick: function () {
+            if (model.streams.length &&
+                !confirm('Replace the current streams with the classic 3-stream IMIX table (60/590/1514 B at 28/16/4 pps)?')) {
+              return;
+            }
+            model.streams = IMIX_TABLE.map(function (row, i) {
+              var s = defaultStream(i);
+              s.name = 'imix_' + row.size;
+              s.packet.payload.frameSize = row.size;
+              s.mode.pps = row.pps;
+              s.isgUsec = row.isg;
+              s.vm.vars = [
+                { name: 'ip_src', sizeBytes: 4, op: 'inc', min: '16.0.0.1', max: '16.0.0.254', step: 1, writeTo: 'IP.src', fixChecksum: true },
+                { name: 'ip_dst', sizeBytes: 4, op: 'inc', min: '48.0.0.1', max: '48.0.0.254', step: 1, writeTo: 'IP.dst', fixChecksum: true }
+              ];
+              return s;
+            });
+            selectedId = model.streams[0].id;
+            renderList(); renderEditor(); regen();
+            TB.ui.toast('Loaded classic IMIX table (60/590/1514 B)', 'ok');
+          } }));
       }
 
       /* ---------- stream editor ---------- */
@@ -301,9 +393,39 @@
         var warn = info.frameBytes !== null && info.frameBytes < 60;
         return el('div', { class: 'size-readout' + (warn ? ' warn' : ''), text: txt + (warn ? '  (below 60 B!)' : '') });
       }
+      /* Quick-fill presets for the selected stream, modeled on shipped examples
+       * (stl/udp_1pkt_dns.py, arp/icmp one-packet profiles). ARP and DNS need
+       * layers the form does not model, so they fill the raw-scapy escape hatch. */
+      var PACKET_PRESETS = [
+        { label: 'ICMP echo', apply: function (s) {
+            s.packet.l4 = { type: 'icmp', sport: 1025, dport: 12, tcpFlags: null,
+              icmpKind: 'echo-request', icmpId: null, icmpSeq: null };
+            s.packet.payload.rawScapy = null;
+          } },
+        { label: 'ARP request', apply: function (s) {
+            s.packet.payload.rawScapy =
+              'Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(op=1,psrc="16.0.0.1",pdst="48.0.0.1")';
+          } },
+        { label: 'DNS query', apply: function (s) {
+            s.packet.payload.rawScapy =
+              'Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(sport=1025,dport=53)/' +
+              'DNS(rd=1,qd=DNSQR(qname="www.example.com"))';
+          } }
+      ];
+
       function packetSection(s) {
         var p = s.packet;
         var box = el('div', {});
+
+        var presetRow = el('div', { class: 'field-row' });
+        presetRow.appendChild(el('span', { class: 'field-label', text: 'Presets:' }));
+        PACKET_PRESETS.forEach(function (pre) {
+          presetRow.appendChild(el('button', { class: 'btn btn-small', text: pre.label,
+            title: TB.help.stl.packetPresets,
+            onclick: function () { pre.apply(s); renderEditor(); regen(); } }));
+        });
+        box.appendChild(presetRow);
+
         var row1 = el('div', { class: 'field-row' });
         row1.appendChild(field({ label: 'Src MAC (optional)', tip: TB.help.stl.srcMac, type: 'text', value: p.l2.srcMac, placeholder: 'aa:bb:cc:dd:ee:ff',
           validate: function (v) { return TB.util.isMac(v) ? null : 'invalid MAC'; },
@@ -324,6 +446,47 @@
         }
         box.appendChild(vlanRow);
 
+        /* models saved before tunnels existed have no p.tunnel */
+        if (!p.tunnel) {
+          p.tunnel = { type: 'none', outerSrc: '10.0.0.1', outerDst: '10.0.0.2', vni: 5000,
+                       label: 100, mplsTtl: null, outerVlanId: 100, spi: 42, si: 1 };
+        }
+        var tun = p.tunnel;
+        var tunRow = el('div', { class: 'field-row' });
+        tunRow.appendChild(field({ label: 'Tunnel / encapsulation', tip: TB.help.stl.tunnel, type: 'select', value: tun.type,
+          options: [{ value: 'none', label: '(none)' }, { value: 'vxlan', label: 'VXLAN' }, { value: 'gre', label: 'GRE' },
+                    { value: 'mpls', label: 'MPLS' }, { value: 'qinq', label: 'QinQ (802.1ad)' }, { value: 'nsh', label: 'NSH' }],
+          onChange: function (v) { tun.type = v; renderEditor(); regen(); } }));
+        if (tun.type === 'vxlan' || tun.type === 'gre') {
+          tunRow.appendChild(field({ label: 'Outer src IP', tip: TB.help.stl.tunnelOuterSrc, type: 'text', value: tun.outerSrc, width: '100px',
+            validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+            onChange: function (v) { tun.outerSrc = v || ''; regen(); } }));
+          tunRow.appendChild(field({ label: 'Outer dst IP', tip: TB.help.stl.tunnelOuterDst, type: 'text', value: tun.outerDst, width: '100px',
+            validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+            onChange: function (v) { tun.outerDst = v || ''; regen(); } }));
+        }
+        if (tun.type === 'vxlan') {
+          tunRow.appendChild(field({ label: 'VNI', tip: TB.help.stl.vni, type: 'int', value: tun.vni, width: '80px',
+            onChange: function (v) { tun.vni = v === null ? 0 : v; regen(); } }));
+        }
+        if (tun.type === 'mpls') {
+          tunRow.appendChild(field({ label: 'Label', tip: TB.help.stl.mplsLabel, type: 'int', value: tun.label, width: '80px',
+            onChange: function (v) { tun.label = v === null ? 0 : v; regen(); } }));
+          tunRow.appendChild(field({ label: 'MPLS TTL (opt.)', tip: TB.help.stl.mplsTtl, type: 'int', value: tun.mplsTtl, width: '80px',
+            onChange: function (v) { tun.mplsTtl = v; regen(); } }));
+        }
+        if (tun.type === 'qinq') {
+          tunRow.appendChild(field({ label: 'Outer VLAN id', tip: TB.help.stl.qinqOuter, type: 'int', value: tun.outerVlanId, width: '80px',
+            onChange: function (v) { tun.outerVlanId = v === null ? 100 : v; regen(); } }));
+        }
+        if (tun.type === 'nsh') {
+          tunRow.appendChild(field({ label: 'SPI', tip: TB.help.stl.nshSpi, type: 'int', value: tun.spi, width: '70px',
+            onChange: function (v) { tun.spi = v === null ? 0 : v; regen(); } }));
+          tunRow.appendChild(field({ label: 'SI', tip: TB.help.stl.nshSi, type: 'int', value: tun.si, width: '60px',
+            onChange: function (v) { tun.si = v === null ? 1 : v; regen(); } }));
+        }
+        box.appendChild(tunRow);
+
         var l3Row = el('div', { class: 'field-row' });
         l3Row.appendChild(field({ label: 'L3', tip: TB.help.stl.l3, type: 'select', value: p.l3.type,
           options: [{ value: 'ipv4', label: 'IPv4' }, { value: 'ipv6', label: 'IPv6' }],
@@ -340,14 +503,23 @@
             onChange: function (v) { p.l3.tos = v; regen(); } }));
           l3Row.appendChild(field({ label: 'TTL (opt.)', tip: TB.help.stl.ttl, type: 'int', value: p.l3.ttl, width: '60px',
             onChange: function (v) { p.l3.ttl = v; regen(); } }));
+          l3Row.appendChild(field({ label: 'Frag offset (opt.)', tip: TB.help.stl.fragOffset, type: 'int', value: p.l3.fragOffset, width: '80px',
+            onChange: function (v) { p.l3.fragOffset = v; regen(); } }));
+          l3Row.appendChild(field({ label: 'MF flag', tip: TB.help.stl.moreFrags, type: 'checkbox', value: !!p.l3.moreFrags,
+            onChange: function (v) { p.l3.moreFrags = v; regen(); } }));
+        }
+        if (p.l3.type === 'ipv6') {
+          l3Row.appendChild(field({ label: 'Ext header', tip: TB.help.stl.ipv6Ext, type: 'select', value: p.l3.ext || 'none',
+            options: [{ value: 'none', label: '(none)' }, { value: 'hbh', label: 'hop-by-hop' }, { value: 'frag', label: 'fragment' }],
+            onChange: function (v) { p.l3.ext = v; regen(); } }));
         }
         box.appendChild(l3Row);
 
         var l4Row = el('div', { class: 'field-row' });
         l4Row.appendChild(field({ label: 'L4', tip: TB.help.stl.l4, type: 'select', value: p.l4.type,
-          options: [{ value: 'udp', label: 'UDP' }, { value: 'tcp', label: 'TCP' }, { value: 'none', label: 'none' }],
+          options: [{ value: 'udp', label: 'UDP' }, { value: 'tcp', label: 'TCP' }, { value: 'icmp', label: 'ICMP' }, { value: 'none', label: 'none' }],
           onChange: function (v) { p.l4.type = v; renderEditor(); regen(); } }));
-        if (p.l4.type !== 'none') {
+        if (p.l4.type === 'udp' || p.l4.type === 'tcp') {
           l4Row.appendChild(field({ label: 'Src port', tip: TB.help.stl.sport, type: 'int', value: p.l4.sport, width: '80px',
             onChange: function (v) { p.l4.sport = v === null ? 0 : v; regen(); } }));
           l4Row.appendChild(field({ label: 'Dst port', tip: TB.help.stl.dport, type: 'int', value: p.l4.dport, width: '80px',
@@ -356,6 +528,15 @@
         if (p.l4.type === 'tcp') {
           l4Row.appendChild(field({ label: 'TCP flags (e.g. S)', tip: TB.help.stl.tcpFlags, type: 'text', value: p.l4.tcpFlags, width: '80px',
             onChange: function (v) { p.l4.tcpFlags = v; regen(); } }));
+        }
+        if (p.l4.type === 'icmp') {
+          l4Row.appendChild(field({ label: 'Kind', tip: TB.help.stl.icmpKind, type: 'select', value: p.l4.icmpKind || 'echo-request',
+            options: [{ value: 'echo-request', label: 'echo request' }, { value: 'echo-reply', label: 'echo reply' }],
+            onChange: function (v) { p.l4.icmpKind = v; regen(); } }));
+          l4Row.appendChild(field({ label: 'Id (opt.)', tip: TB.help.stl.icmpId, type: 'int', value: p.l4.icmpId, width: '70px',
+            onChange: function (v) { p.l4.icmpId = v; regen(); } }));
+          l4Row.appendChild(field({ label: 'Seq (opt.)', tip: TB.help.stl.icmpSeq, type: 'int', value: p.l4.icmpSeq, width: '70px',
+            onChange: function (v) { p.l4.icmpSeq = v; regen(); } }));
         }
         box.appendChild(l4Row);
 
@@ -387,8 +568,11 @@
         row.appendChild(field({ label: 'Mode', tip: TB.help.stl.mode, type: 'select', value: m.type,
           options: [{ value: 'cont', label: 'continuous' }, { value: 'single_burst', label: 'single burst' }, { value: 'multi_burst', label: 'multi burst' }],
           onChange: function (v) { m.type = v; renderEditor(); renderList(); regen(); } }));
-        row.appendChild(field({ label: 'PPS', tip: TB.help.stl.pps, type: 'float', value: m.pps, width: '90px',
+        row.appendChild(field({ label: 'Rate', tip: TB.help.stl.pps, type: 'float', value: m.pps, width: '90px',
           onChange: function (v) { m.pps = v === null ? 1 : v; renderList(); regen(); } }));
+        row.appendChild(field({ label: 'Unit', tip: TB.help.stl.rateUnit, type: 'select', value: m.rateUnit || 'pps',
+          options: RATE_UNITS.map(function (u) { return { value: u.value, label: u.label }; }),
+          onChange: function (v) { m.rateUnit = v; renderList(); regen(); } }));
         if (m.type === 'single_burst') {
           row.appendChild(field({ label: 'Total packets', tip: TB.help.stl.totalPkts, type: 'int', value: m.totalPkts, width: '90px',
             onChange: function (v) { m.totalPkts = v === null ? 1000 : v; regen(); } }));
@@ -460,7 +644,16 @@
             onChange: function (x) { v.max = x || '0'; regen(); } }));
           row.appendChild(field({ label: 'step', tip: TB.help.stl.vmStep, type: 'int', value: v.step, width: '55px',
             onChange: function (x) { v.step = x === null ? 1 : x; regen(); } }));
+          var otherVars = vm.vars.filter(function (o) { return o !== v; }).map(function (o) { return o.name; });
+          row.appendChild(field({ label: 'on wrap, step', tip: TB.help.stl.vmNextVar, type: 'select', value: v.nextVar || '',
+            options: [{ value: '', label: '(nothing)' }].concat(otherVars.map(function (nm) { return { value: nm, label: nm }; })),
+            onChange: function (x) { v.nextVar = x || null; regen(); } }));
           row.appendChild(writeTargetField('write to', v.writeTo, function (x) { v.writeTo = x; regen(); }));
+          row.appendChild(field({ label: 'offset fixup', tip: TB.help.stl.vmOffsetFixup, type: 'int', value: v.offsetFixup, width: '55px',
+            onChange: function (x) { v.offsetFixup = x; regen(); } }));
+          row.appendChild(field({ label: 'split cores', tip: TB.help.stl.vmSplitCores, type: 'checkbox',
+            value: v.splitToCores !== false,
+            onChange: function (x) { v.splitToCores = x ? true : false; regen(); } }));
           row.appendChild(field({ label: 'fix IPv4 csum', tip: TB.help.stl.vmFixCsum, type: 'checkbox', value: v.fixChecksum,
             onChange: function (x) { v.fixChecksum = x; regen(); } }));
           row.appendChild(el('button', { class: 'btn btn-small btn-danger', text: '✕',
@@ -470,7 +663,8 @@
         box.appendChild(el('button', { class: 'btn btn-small', text: '+ Add variable',
           onclick: function () {
             vm.vars.push({ name: 'var' + (vm.vars.length + 1), sizeBytes: 4, op: 'inc',
-              min: '16.0.0.1', max: '16.0.0.254', step: 1, writeTo: 'IP.src', fixChecksum: true });
+              min: '16.0.0.1', max: '16.0.0.254', step: 1, nextVar: null, splitToCores: true,
+              writeTo: 'IP.src', offsetFixup: null, fixChecksum: true });
             renderEditor(); regen();
           } }));
 
@@ -545,6 +739,7 @@
       function renderAll() {
         renderTopbar();
         renderTunables();
+        renderPcap();
         renderList();
         renderEditor();
         regen();

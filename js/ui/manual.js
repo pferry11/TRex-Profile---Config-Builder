@@ -12,17 +12,25 @@
   var FIELD_LABELS = {
     stl: {
       profileName: 'Profile name', streamName: 'Stream name', srcMac: 'Src MAC', dstMac: 'Dst MAC',
-      vlan: 'VLAN', vlanId: 'VLAN id', vlanPrio: 'VLAN priority', l3: 'L3', srcIp: 'Src IP', dstIp: 'Dst IP',
-      tos: 'TOS', ttl: 'TTL', l4: 'L4', sport: 'Src port', dport: 'Dst port', tcpFlags: 'TCP flags',
+      vlan: 'VLAN', vlanId: 'VLAN id', vlanPrio: 'VLAN priority',
+      tunnel: 'Tunnel', tunnelOuterSrc: 'Outer src IP', tunnelOuterDst: 'Outer dst IP', vni: 'VXLAN VNI',
+      mplsLabel: 'MPLS label', mplsTtl: 'MPLS TTL', qinqOuter: 'QinQ outer VLAN', nshSpi: 'NSH SPI', nshSi: 'NSH SI',
+      l3: 'L3', srcIp: 'Src IP', dstIp: 'Dst IP',
+      tos: 'TOS', ttl: 'TTL', fragOffset: 'Frag offset', moreFrags: 'MF flag', ipv6Ext: 'IPv6 ext header',
+      l4: 'L4', sport: 'Src port', dport: 'Dst port', tcpFlags: 'TCP flags',
+      icmpKind: 'ICMP kind', icmpId: 'ICMP id', icmpSeq: 'ICMP seq', packetPresets: 'Packet presets',
       frameSize: 'Frame size', bindTunable: 'Bind to tunable', fill: 'Fill char', rawScapy: 'Raw scapy',
-      mode: 'TX mode', pps: 'PPS', totalPkts: 'Total packets', pktsPerBurst: 'Packets per burst',
+      mode: 'TX mode', pps: 'Rate', rateUnit: 'Rate unit', totalPkts: 'Total packets', pktsPerBurst: 'Packets per burst',
       ibg: 'Inter-burst gap', count: 'Burst count', isg: 'ISG (start delay)', selfStart: 'Self start',
       next: 'Next stream', actionCount: 'Action count', vmVarName: 'VM variable name', vmSize: 'VM size',
       vmOp: 'VM operation', vmMin: 'VM min', vmMax: 'VM max', vmStep: 'VM step', vmWriteTo: 'VM write target',
+      vmNextVar: 'VM wrap dependency', vmOffsetFixup: 'VM offset fixup', vmSplitCores: 'VM split to cores',
       vmFixCsum: 'Fix IPv4 checksum', tuple: 'Tuple generator', tupleLimit: 'Tuple flow limit',
       cacheSize: 'VM cache size', fsType: 'Flow stats type', pgId: 'pg_id', addPortId: 'Add port_id',
       tunableName: 'Tunable name', tunableType: 'Tunable type', tunableDefault: 'Tunable default',
-      tunableHelp: 'Tunable help', trexVersion: 'TRex version'
+      tunableHelp: 'Tunable help', trexVersion: 'TRex version',
+      pcapReplayOn: 'Pcap replay', pcapReplayFile: 'Replay pcap path', pcapReplayIpg: 'Replay IPG',
+      pcapReplaySpeedup: 'Replay speedup', pcapReplayLoop: 'Replay loop count'
     },
     astf: {
       profileName: 'Profile name', mode: 'Mode', clientRange: 'Client IP range', serverRange: 'Server IP range',
@@ -110,19 +118,27 @@
 
     { id: 'stl', title: 'STL Profile builder', html: function () {
       return tabIntro('stl') +
-        '<h4>Layout</h4><p>Three panes: the <strong>stream list</strong> (add, duplicate, reorder, enable/disable), ' +
+        '<h4>Layout</h4><p>Three panes: the <strong>stream list</strong> (add, duplicate, reorder, enable/disable - the ' +
+        '<strong>IMIX preset</strong> button loads the classic 60/590/1514 B three-stream table in one click), ' +
         'the <strong>stream editor</strong> for the selected stream, and the <strong>live output</strong> which regenerates as you type.</p>' +
         '<h4>Building a stream</h4><ol>' +
-        '<li><strong>Packet</strong> - choose headers (optional MACs, VLAN, IPv4/IPv6, UDP/TCP) and the frame size; the ' +
-        'payload pads to reach it. A live readout shows header and frame bytes.</li>' +
-        '<li><strong>TX mode</strong> - continuous rate, one burst, or repeated bursts.</li>' +
+        '<li><strong>Packet</strong> - choose headers (optional MACs, VLAN, IPv4/IPv6 with fragments and extension ' +
+        'headers, UDP/TCP/ICMP) and the frame size; the payload pads to reach it. A live readout shows header and ' +
+        'frame bytes. Preset buttons quick-fill ICMP echo, ARP request and DNS query packets, and a tunnel selector ' +
+        'wraps the packet in VXLAN, GRE, MPLS, QinQ or NSH encapsulation.</li>' +
+        '<li><strong>TX mode</strong> - continuous rate, one burst, or repeated bursts. The rate can be given in pps, ' +
+        'bps L1, bps L2 or a percentage of the port line rate.</li>' +
         '<li><strong>Timing &amp; chaining</strong> - stagger starts with ISG, or chain streams (self start off + a ' +
         '"next" reference) to build sequences and loops.</li>' +
         '<li><strong>Field engine</strong> - sweep or randomise packet fields per packet (e.g. source IP over a range), ' +
-        'or use the tuple generator for unique client IP/port pairs.</li>' +
+        'or use the tuple generator for unique client IP/port pairs. Variables can be chained into nested loops ' +
+        '(one steps when another wraps), write with a byte offset fixup, and opt out of per-core range splitting.</li>' +
         '<li><strong>Flow stats</strong> - add per-stream counters or latency measurement via pg_id.</li></ol>' +
         '<h4>Tunables</h4><p>Add a tunable (e.g. <code>size</code>) and bind a field to it with the ⚙ selector: the ' +
         'generated profile then takes <code>-t size=128</code> style arguments at load time.</p>' +
+        '<h4>Pcap replay</h4><p>The <strong>Pcap replay</strong> box swaps the whole profile for ' +
+        '<code>STLProfile.load_pcap</code>: TRex replays every packet of a capture, at its recorded timing or a fixed ' +
+        'IPG, looped N times. The generated profile keeps <code>-t ipg_usec=...,loop_count=...</code> overrides.</p>' +
         '<p class="man-note">Latency streams ignore the -m multiplier and each needs a unique pg_id - the builder warns ' +
         'about both.</p>' + fieldTable('stl');
     } },
@@ -136,6 +152,11 @@
         '<li><strong>program</strong> - script the exchange yourself: ordered client and server command lists ' +
         '(send/recv, delays, counted loops). The HTTP presets generate realistic request/response payloads, and ' +
         '"auto" recv sizes always match the peer, like the shipped http_manual_commands example.</li></ul>' +
+        '<h4>L7 presets</h4><p>One-click starting points that replace the current entries: <strong>DNS</strong>, ' +
+        '<strong>SIP</strong> and <strong>RTP</strong> UDP programs, an <strong>Enterprise mix</strong> ' +
+        '(SFR-style multi-pcap blend with representative cps weights), and an <strong>Elephant flow</strong> ' +
+        'throughput soak - one keep-alive connection whose server loops 100 x 64 KB sends with enlarged TCP buffers ' +
+        '(http_eflow.py pattern). Everything stays editable after loading.</p>' +
         '<h4>IP generator</h4><p>Client and server pools; connections are sourced from the client range towards the ' +
         'server range, which the receiver (or DUT) must route/answer.</p>' +
         '<h4>Global info</h4><p>Optional per-side TCP tuning (mss, buffers, keepalives), IPv6, and ' +
@@ -216,37 +237,46 @@
     } },
 
     { id: 'future', title: 'Future updates', html: function () {
+      /* status: 'planned' | 'in-progress' | 'done' - flip this field as work happens.
+       * It is the single tracker for the roadmap; nothing duplicates it elsewhere. */
       var rows = [
-        /* [area, improvement, what it adds, effort] */
-        ['STL builder', 'Rate units beyond pps', 'STLTXCont also accepts bps_L1/bps_L2 and percentage-of-line-rate; a unit selector would match how tests are usually specified.', 'Small'],
-        ['STL builder', 'Pcap replay streams', 'STLProfile.load_pcap(file, ipg_usec, loop_count) - replay a capture as a stateless stream, like the shipped stl/pcap.py.', 'Medium'],
-        ['STL builder', 'Tunnel encapsulations', 'VXLAN, MPLS, GRE, QinQ (stacked VLANs) and NSH header layers - TRex supports them all via scapy.', 'Medium'],
-        ['STL builder', 'More packet presets', 'ICMP echo, ARP, DNS-query payloads, IPv6 extension headers and fragments (see stl/udp_1pkt_dns.py, udp_1pkt_frag.py).', 'Medium'],
-        ['STL builder', 'IMIX preset button', 'One click to load the classic 60/590/1514 three-stream IMIX table.', 'Small'],
-        ['STL builder', 'Richer field engine', 'Dependent variables, write offset fixups, per-core split control (stl/dependent_field_engine_vars.py, split_var_to_cores.py).', 'Medium'],
-        ['ASTF builder', 'HTTPS/TLS traffic', 'In v3.06 via TLS pcaps (avl/delay_10_https_0.pcap preset); newer TRex adds native TLS program support.', 'Medium'],
-        ['ASTF builder', 'L7 protocol presets', 'One-click DNS/SIP/RTP UDP programs and an EMIX/SFR-style multi-pcap enterprise mix preset.', 'Small'],
-        ['ASTF builder', 'Elephant-flow preset', 'Long keep-alive template with looped large sends (astf/http_eflow.py pattern) for throughput soak tests.', 'Small'],
-        ['ASTF builder', 'GTP-U tunnel topology', 'Mobile-network testing via tunnels_topo (astf/gtpu_topo.py): per-connection GTP-U encapsulation with TEID ranges.', 'Large'],
-        ['Scenarios', 'NDR benchmark wizard', 'Drive the shipped ./ndr script: find the no-drop rate automatically instead of manual -m stepping.', 'Medium'],
-        ['Scenarios', 'N-stage ramp', 'Generalise the low/mid/high wizard to any number of stages.', 'Small'],
-        ['Scenarios', 'Bidirectional two-server', 'Both boxes run client AND server roles simultaneously (client masks on both sides).', 'Medium'],
-        ['New domain', 'TRex-EMU profiles', 'Client emulation profiles: ARP, DHCPv4/v6, ICMP, IGMP, IPv6 ND, DNS/mDNS - a whole additional TRex subsystem.', 'Large'],
-        ['New domain', 'TPG configuration', 'Tagged Packet Group setup (tpg_tags_conf.json) for per-tag rx stats on DOT1Q/QinQ.', 'Medium'],
-        ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large'],
-        ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small'],
-        ['App platform', 'Live TRex control', 'Extend the Flask backend to the TRex automation API: push a profile, start/stop, live stats - the app becomes a controller, not just a generator.', 'Large'],
-        ['App platform', 'Import existing .py profiles', 'Parse shipped/hand-written profiles back into editable models. Python parsing in JS is genuinely hard - realistic only for app-generated files.', 'Large'],
-        ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small'],
-        ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium'],
-        ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small']
+        /* [area, improvement, what it adds, effort, status] */
+        ['STL builder', 'Rate units beyond pps', 'STLTXCont also accepts bps_L1/bps_L2 and percentage-of-line-rate; a unit selector would match how tests are usually specified.', 'Small', 'done'],
+        ['STL builder', 'Pcap replay streams', 'STLProfile.load_pcap(file, ipg_usec, loop_count) - replay a capture as a stateless stream, like the shipped stl/pcap.py.', 'Medium', 'done'],
+        ['STL builder', 'Tunnel encapsulations', 'VXLAN, MPLS, GRE, QinQ (stacked VLANs) and NSH header layers - TRex supports them all via scapy.', 'Medium', 'done'],
+        ['STL builder', 'More packet presets', 'ICMP echo, ARP, DNS-query payloads, IPv6 extension headers and fragments (see stl/udp_1pkt_dns.py, udp_1pkt_frag.py).', 'Medium', 'done'],
+        ['STL builder', 'IMIX preset button', 'One click to load the classic 60/590/1514 three-stream IMIX table.', 'Small', 'done'],
+        ['STL builder', 'Richer field engine', 'Dependent variables, write offset fixups, per-core split control (stl/dependent_field_engine_vars.py, split_var_to_cores.py).', 'Medium', 'done'],
+        ['ASTF builder', 'HTTPS/TLS traffic', 'In v3.06 via TLS pcaps (avl/delay_10_https_0.pcap preset); newer TRex adds native TLS program support.', 'Medium', 'planned'],
+        ['ASTF builder', 'L7 protocol presets', 'One-click DNS/SIP/RTP UDP programs and an EMIX/SFR-style multi-pcap enterprise mix preset.', 'Small', 'done'],
+        ['ASTF builder', 'Elephant-flow preset', 'Long keep-alive template with looped large sends (astf/http_eflow.py pattern) for throughput soak tests.', 'Small', 'done'],
+        ['ASTF builder', 'GTP-U tunnel topology', 'Mobile-network testing via tunnels_topo (astf/gtpu_topo.py): per-connection GTP-U encapsulation with TEID ranges.', 'Large', 'planned'],
+        ['Scenarios', 'NDR benchmark wizard', 'Drive the shipped ./ndr script: find the no-drop rate automatically instead of manual -m stepping.', 'Medium', 'planned'],
+        ['Scenarios', 'N-stage ramp', 'Generalise the low/mid/high wizard to any number of stages.', 'Small', 'planned'],
+        ['Scenarios', 'Bidirectional two-server', 'Both boxes run client AND server roles simultaneously (client masks on both sides).', 'Medium', 'planned'],
+        ['New domain', 'TRex-EMU profiles', 'Client emulation profiles: ARP, DHCPv4/v6, ICMP, IGMP, IPv6 ND, DNS/mDNS - a whole additional TRex subsystem.', 'Large', 'planned'],
+        ['New domain', 'TPG configuration', 'Tagged Packet Group setup (tpg_tags_conf.json) for per-tag rx stats on DOT1Q/QinQ.', 'Medium', 'planned'],
+        ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large', 'planned'],
+        ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small', 'planned'],
+        ['App platform', 'Live TRex control', 'Extend the Flask backend to the TRex automation API: push a profile, start/stop, live stats - the app becomes a controller, not just a generator.', 'Large', 'planned'],
+        ['App platform', 'Import existing .py profiles', 'Parse shipped/hand-written profiles back into editable models. Python parsing in JS is genuinely hard - realistic only for app-generated files.', 'Large', 'planned'],
+        ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small', 'planned'],
+        ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium', 'planned'],
+        ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small', 'planned']
       ];
+      var STATUS_LABEL = { planned: 'Planned', 'in-progress': 'In progress', done: 'Done' };
+      var pending = rows.filter(function (r) { return r[4] !== 'done'; }).length;
       return '<p>Candidate improvements, mapped against the full TRex feature set ' +
         '(trex-tgn.cisco.com). None are required for day-to-day use - the current app covers STL, ASTF, cap2, ' +
         'platform config, CLI and the two key scenarios end to end.</p>' +
-        '<table class="man-table"><tr><th>Area</th><th>Improvement</th><th>What it adds</th><th>Effort</th></tr>' +
+        '<p class="man-purpose">' + pending + ' of ' + rows.length + ' open. Status lives only here - flip the ' +
+        '5th field of a row in js/ui/manual.js when work starts or finishes.</p>' +
+        '<table class="man-table"><tr><th>Area</th><th>Improvement</th><th>What it adds</th><th>Effort</th><th>Status</th></tr>' +
         rows.map(function (r) {
-          return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>';
+          var status = r[4] || 'planned';
+          var rowClass = status === 'done' ? ' class="man-row-done"' : '';
+          return '<tr' + rowClass + '><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td>' +
+            '<td><span class="man-status man-status-' + status + '">' + STATUS_LABEL[status] + '</span></td></tr>';
         }).join('') + '</table>' +
 
         '<h4>How to add support for a new TRex version (3.07, 3.08, …)</h4>' +

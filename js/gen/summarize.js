@@ -14,22 +14,42 @@
 
   /* ---------------- STL ---------------- */
 
+  function stlRatePhrase(value, unit) {
+    if (unit === 'bps_L1') { return value + ' bps (L1)'; }
+    if (unit === 'bps_L2') { return value + ' bps (L2)'; }
+    if (unit === 'percentage') { return value + '% of line rate'; }
+    return value + ' pps';
+  }
+
   function stlModePhrase(m) {
-    if (m.type === 'cont') { return 'transmits continuously at ' + m.pps + ' pps'; }
-    if (m.type === 'single_burst') { return 'sends a single burst of ' + n(m.totalPkts, 'packet') + ' at ' + m.pps + ' pps'; }
+    var rate = stlRatePhrase(m.pps, m.rateUnit);
+    if (m.type === 'cont') { return 'transmits continuously at ' + rate; }
+    if (m.type === 'single_burst') { return 'sends a single burst of ' + n(m.totalPkts, 'packet') + ' at ' + rate; }
     return 'sends ' + n(m.count, 'burst') + ' of ' + n(m.pktsPerBurst, 'packet') +
-      ' at ' + m.pps + ' pps (gap ' + m.ibgUsec + ' usec)';
+      ' at ' + rate + ' (gap ' + m.ibgUsec + ' usec)';
   }
 
   function stlPacketPhrase(s) {
     var p = s.packet;
     if (p.payload && p.payload.rawScapy) { return 'a raw scapy-defined packet'; }
     var l4 = p.l4.type === 'none' ? (p.l3.type === 'ipv6' ? 'IPv6' : 'IPv4') : p.l4.type.toUpperCase();
+    if (p.l4.type === 'icmp') { l4 = 'ICMP ' + (p.l4.icmpKind === 'echo-reply' ? 'echo-reply' : 'echo-request'); }
     var out = p.payload.frameSizeTunable
       ? l4 + ' frames sized by --' + p.payload.frameSizeTunable
       : p.payload.frameSize + '-byte ' + l4 + ' frames';
     out += ' ' + p.l3.src + ' -> ' + p.l3.dst;
     if (p.vlan && p.vlan.enabled) { out += ' on VLAN ' + p.vlan.id; }
+    if (p.l3.type === 'ipv4' && (p.l3.moreFrags || (p.l3.fragOffset !== null && p.l3.fragOffset !== undefined && p.l3.fragOffset !== ''))) {
+      out += ' (IPv4 fragment)';
+    }
+    if (p.l3.type === 'ipv6' && p.l3.ext === 'hbh') { out += ' (hop-by-hop ext header)'; }
+    if (p.l3.type === 'ipv6' && p.l3.ext === 'frag') { out += ' (fragment ext header)'; }
+    var t = p.tunnel || {};
+    if (t.type === 'vxlan') { out += ', VXLAN vni ' + t.vni + ' via ' + t.outerSrc + ' -> ' + t.outerDst; }
+    else if (t.type === 'gre') { out += ', GRE tunnel ' + t.outerSrc + ' -> ' + t.outerDst; }
+    else if (t.type === 'mpls') { out += ', MPLS label ' + t.label; }
+    else if (t.type === 'qinq') { out += ', QinQ outer VLAN ' + t.outerVlanId; }
+    else if (t.type === 'nsh') { out += ', NSH spi ' + t.spi + ' si ' + t.si; }
     return out;
   }
 
@@ -37,7 +57,10 @@
     var out = [];
     (s.vm && s.vm.vars ? s.vm.vars : []).forEach(function (v) {
       var verb = v.op === 'random' ? 'randomises' : (v.op === 'dec' ? 'sweeps down' : 'sweeps');
-      out.push(verb + ' ' + v.writeTo + ' over ' + v.min + '-' + v.max);
+      var extra = '';
+      if (v.nextVar) { extra += ' (steps ' + v.nextVar + ' on wrap)'; }
+      if (v.splitToCores === false) { extra += ' (not split per core)'; }
+      out.push(verb + ' ' + v.writeTo + ' over ' + v.min + '-' + v.max + extra);
     });
     if (s.vm && s.vm.tuple) {
       var t = s.vm.tuple;
@@ -61,6 +84,15 @@
 
   function stl(model) {
     var lines = [];
+    if (model.pcapReplay && model.pcapReplay.enabled) {
+      var r = model.pcapReplay;
+      var ipgPart = (r.ipgUsec === null || r.ipgUsec === undefined || r.ipgUsec === '')
+        ? "at the pcap's native timing" + (r.speedup && r.speedup !== 1 ? ' (speedup x' + r.speedup + ')' : '')
+        : 'at ' + r.ipgUsec + ' usec between packets';
+      var loopPart = r.loopCount === 0 ? 'looped forever' : 'looped ' + n(r.loopCount, 'time');
+      return ['Replays ' + (r.file || '<no pcap set>') + ' as stateless streams ' + ipgPart + ', ' + loopPart + '.',
+              'Override at load time with -t ipg_usec=...,loop_count=...'];
+    }
     var enabled = (model.streams || []).filter(function (s) { return s.enabled !== false; });
     if (!enabled.length) { return ['Empty profile: no enabled streams.']; }
     enabled.forEach(function (s) {
@@ -68,12 +100,21 @@
       lines.push(s.name + ': ' + stlModePhrase(s.mode) + ' - ' + stlPacketPhrase(s) +
         (extras.length ? '; ' + extras.join('; ') : '') + '.');
     });
-    var agg = 0;
-    var haveCont = false;
+    /* aggregate per rate unit so mixed-unit profiles stay honest, e.g.
+     * "48 pps + 25% of line rate at -m 1" */
+    var aggByUnit = {};
+    var unitOrder = [];
     enabled.forEach(function (s) {
-      if (s.mode.type === 'cont' && !(s.chain && s.chain.selfStart === false)) { agg += s.mode.pps; haveCont = true; }
+      if (s.mode.type === 'cont' && !(s.chain && s.chain.selfStart === false)) {
+        var u = s.mode.rateUnit || 'pps';
+        if (!(u in aggByUnit)) { aggByUnit[u] = 0; unitOrder.push(u); }
+        aggByUnit[u] += s.mode.pps;
+      }
     });
-    if (haveCont) { lines.push('Aggregate self-starting continuous rate: ' + agg + ' pps at -m 1.'); }
+    if (unitOrder.length) {
+      var parts = unitOrder.map(function (u) { return stlRatePhrase(aggByUnit[u], u); });
+      lines.push('Aggregate self-starting continuous rate: ' + parts.join(' + ') + ' at -m 1.');
+    }
     if (model.tunables && model.tunables.length) {
       lines.push('Tunables: ' + model.tunables.map(function (t) { return '--' + t.name; }).join(', ') + '.');
     }
