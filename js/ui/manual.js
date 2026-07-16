@@ -236,6 +236,38 @@
         '<p>Then browse to port 8080: pcap Browse… and server-side Validate light up automatically.</p>';
     } },
 
+    { id: 'tests', title: 'Self tests', html: function () {
+      return '<p>The app ships its own test suite: <a href="tests.html" target="_blank" rel="noopener">open ' +
+        'tests.html ↗</a> (also linked as <em>self tests</em> in the header). Every test runs automatically, in your ' +
+        'browser, each time that page loads - reload to re-run. No framework, build step or external tooling is ' +
+        'involved: the page loads the same generator files as this app and asserts on their output, so it works from ' +
+        'disk or hosted, anywhere the app itself runs.</p>' +
+        '<h4>What is covered</h4>' +
+        '<p>Every generator the app has: STL, ASTF, cap2, platform config, CLI, the scenario wizards and the ' +
+        'plain-English summaries, plus app plumbing (version registry, localStorage persistence, backend bridge). ' +
+        'The test page groups them by area and documents what each test verifies, right under its PASS/FAIL row.</p>' +
+        '<h4>Four kinds of test</h4>' +
+        '<ul>' +
+        '<li><strong>Goldens</strong> - build a profile model in code, generate with a pinned date, compare ' +
+        'character-for-character against an expected file. Fixtures mirror profiles shipped with TRex v3.06 ' +
+        '(stl/imix.py, astf/http_simple.py, cap2/dns.yaml...), and the expected outputs were validated at authoring ' +
+        'time by compiling the generated Python and running it through <code>stl-sim</code>/<code>astf-sim</code>. ' +
+        'A one-character change in generator output fails the golden and prints the first differing line.</li>' +
+        '<li><strong>Structural checks</strong> - assert key lines appear where a full golden would be brittle.</li>' +
+        '<li><strong>Warning tests</strong> - feed deliberately broken models in, expect the right human-readable ' +
+        'warning out.</li>' +
+        '<li><strong>Round-trips</strong> - serialise a model to JSON and back; regeneration must be byte-identical. ' +
+        'This is the guarantee that saved <code>.trexb.json</code> models stay reloadable across versions.</li>' +
+        '</ul>' +
+        '<h4>When they run</h4>' +
+        '<p>On every load of the test page - there is no scheduler or CI hook. The working practice: open the page ' +
+        'after touching anything under <code>js/gen/</code> and before every commit; each feature added to the app ' +
+        'lands together with its tests in the same commit. A meta-test fails the suite if any test is missing its ' +
+        'write-up, so the documentation cannot drift from the test list.</p>' +
+        '<p class="man-note">Goldens are meant to fail when generated output changes. If a change is intentional, ' +
+        'update the golden in the same commit - never loosen a golden to "make it pass".</p>';
+    } },
+
     { id: 'future', title: 'Future updates', html: function () {
       /* status: 'planned' | 'in-progress' | 'done' - flip this field as work happens.
        * It is the single tracker for the roadmap; nothing duplicates it elsewhere. */

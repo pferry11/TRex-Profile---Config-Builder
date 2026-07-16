@@ -4,19 +4,52 @@
 <meta charset="utf-8">
 <title>TRex Builder - self tests</title>
 <style>
-  body { font-family: Consolas, monospace; background: #14171c; color: #d7dce2; margin: 20px; }
+  body { font-family: Consolas, monospace; background: #14171c; color: #d7dce2; margin: 20px; max-width: 1100px; }
   h1 { font-size: 18px; }
   .test { padding: 6px 10px; margin: 4px 0; border-radius: 4px; }
   .pass { background: #16321c; border-left: 4px solid #3fb950; }
   .fail { background: #3a1a1c; border-left: 4px solid #f85149; }
   .summary { margin: 14px 0; font-size: 16px; font-weight: bold; }
+  .run-meta { color: #8b95a1; font-size: 12px; margin-bottom: 14px; }
   pre.diff { background: #0d1015; padding: 10px; overflow-x: auto; font-size: 12px; }
   .exp { color: #3fb950; } .act { color: #f85149; }
+  .test-doc { color: #8b95a1; font-size: 12px; margin-top: 3px; line-height: 1.5; font-family: 'Segoe UI', sans-serif; }
+  .section-head { margin: 22px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #2c3540; color: #3b9cff; font-size: 14px; font-weight: bold; }
+  .section-blurb { color: #8b95a1; font-size: 12px; margin: 0 0 8px; font-family: 'Segoe UI', sans-serif; line-height: 1.5; }
+  .intro { background: #0d1015; border: 1px solid #2c3540; border-radius: 6px; padding: 12px 16px; font-size: 13px; line-height: 1.6; font-family: 'Segoe UI', sans-serif; }
+  .intro h2 { font-size: 14px; margin: 10px 0 4px; color: #3b9cff; }
+  .intro p { margin: 6px 0; }
+  .intro a { color: #3b9cff; }
 </style>
 </head>
 <body>
 <h1>TRex Profile &amp; Config Builder — generator self tests</h1>
 <div id="summary" class="summary">running...</div>
+<div id="run-meta" class="run-meta"></div>
+
+<div class="intro">
+  <h2>What this page is</h2>
+  <p>The app's entire test suite. Every test below ran <strong>just now, in this browser, when the page loaded</strong> —
+  reload the page to run them again. There is no test framework, build step, or external tooling: the suite is plain
+  JavaScript that loads the same generator files as the real app (<code>js/gen/*</code>, <code>js/core/*</code>) and
+  asserts on their output. It runs anywhere the app runs, including straight from disk with no server.</p>
+  <h2>How the tests work</h2>
+  <p><strong>Golden tests</strong> build a profile model in code (a fixture), generate the Python/YAML artifact with a
+  pinned date, and compare it character-for-character against an expected file embedded in this page. The fixtures are
+  modelled on profiles that ship with TRex v3.06 (stl/imix.py, astf/http_simple.py, cap2/dns.yaml…), and the goldens
+  were validated at authoring time by compiling the generated Python and running it through TRex's offline simulators
+  (<code>stl-sim</code> / <code>astf-sim</code>). Any change to a generator that alters output by even one character
+  fails the golden and prints the first differing line.</p>
+  <p><strong>Structural tests</strong> assert that key lines appear in the output where a full golden would be brittle.
+  <strong>Warning tests</strong> feed deliberately broken models in and check the right human-readable warning comes
+  out. <strong>Round-trip tests</strong> serialize a model to JSON and back and require regeneration to be identical —
+  this is what guarantees saved <code>.trexb.json</code> models stay re-loadable.</p>
+  <h2>When to run them</h2>
+  <p>Open this page after any change to a generator, and before committing. The main app links here from the header
+  (<em>self tests</em>) and the Manual's <em>Self tests</em> chapter. A failing test blocks nothing mechanically —
+  the discipline is: goldens only change when a release intends to change generated output.</p>
+</div>
+
 <div id="results"></div>
 
 <script src="js/core/util.js"></script>
@@ -1402,22 +1435,196 @@ test('cfg warnings: thread collision, core excess, mixed modes, iface count, cro
   return { pass: !fails.length, detail: fails.join(', ') };
 });
 
+/* ---------------- test documentation ----------------
+ * One entry per registered test, keyed by its exact name. Rendered under the
+ * result row. The meta-test at the bottom fails if a test is missing here,
+ * so new tests cannot land undocumented. */
+var TEST_DOCS = {
+  'golden: minimal cont UDP with size tunable (udp_1pkt_simple-like)':
+    'The baseline STL profile: one continuous UDP stream whose frame size is bound to a --size tunable. Verifies the whole file end to end - header comments, summary block, argparse plumbing, STLPktBuilder padding and STLTXCont - against the shipped udp_1pkt_simple.py pattern.',
+  'golden: 3-stream IMIX with VM vars (imix-like)':
+    'The classic 60/590/1514-byte IMIX table at 28/16/4 pps with staggered isg and src/dst IP Field-Engine sweeps, matching the shipped stl/imix.py. Also the reference output for the IMIX preset button.',
+  'golden: chained single-burst -> multi-burst (multi_burst_2st_1000pkt-like)':
+    'Stream chaining: a self-starting single burst that triggers a non-self-starting multi burst via next=. Verifies isg, self_start=False and burst kwargs.',
+  'golden: latency flow-stats with port_id pg_id (flow_stats_latency-like)':
+    'A latency-measured stream using STLFlowLatencyStats with pg_id offset by port_id. Verifies the generator switches get_streams/create_stream signatures to accept port_id.',
+  'golden: rate units bps_L2 cont + percentage single burst':
+    'The rate-unit selector (v0.15.0): a continuous stream in bps_L2 and a single burst as a percentage of line rate. Verifies STLTXCont(bps_L2=...)/STLTXSingleBurst(percentage=...) kwargs and unit-aware summary phrasing.',
+  'golden: packet layers ICMP/ICMPv6, IPv4 frag, IPv6 ext header':
+    'The packet-preset layers (v0.15.0): ICMP echo request on IPv4 with id/seq, an IPv4 later-fragment (flags="MF", frag=), IPv6 with a fragment extension header, and an ICMPv6 echo reply - four streams in one golden.',
+  'golden: tunnels VXLAN/GRE/MPLS/QinQ/NSH with contrib imports':
+    'The tunnel encapsulations (v0.15.0): one stream per tunnel type. Verifies the outer header stacks (outer IP/UDP:4789/VXLAN/inner Ether, GRE, MPLS label, Dot1AD+Dot1Q, NSH spi/si) and that scapy.contrib imports are emitted only for MPLS/NSH.',
+  'golden: pcap replay via STLProfile.load_pcap (stl/pcap.py-like)':
+    'Pcap-replay mode (v0.15.0): the whole profile is STLProfile.load_pcap with -t ipg_usec/loop_count overrides, matching the shipped stl/pcap.py shape.',
+  'golden: VM dependent vars, offset fixup, split_to_cores=False':
+    'The richer Field Engine (v0.15.0): a variable that steps another on wrap (next_var=), a write with offset_fixup=, and per-core splitting disabled - the dependent_field_engine_vars.py / split_var_to_cores.py patterns.',
+  'warning: VM next_var references unknown variable':
+    'Feeds a var whose wrap-dependency names a variable that does not exist and expects the generator to warn rather than emit a profile TRex would reject.',
+  'pcap replay: warns when enabled streams are ignored':
+    'With pcap replay ON and streams still in the list, the generator must warn that the stream list and tunables are ignored, so a user cannot silently lose work.',
+  'summary: mixed-unit aggregate groups per rate unit':
+    'A profile mixing pps and percentage streams must summarise as "100 pps + 25% of line rate at -m 1" - never a nonsense sum across different units.',
+  'round-trip: model -> JSON -> parse -> regenerate identical':
+    'Serialises the IMIX fixture through JSON.stringify/parse and regenerates. Byte-identical output proves saved .trexb.json models survive save/load forever.',
+  'warning: frame size below 60 bytes':
+    'Frame sizes under 60 B are rejected or padded by most NICs; the generator must say so.',
+  'warning: duplicate latency pg_id':
+    'Two latency streams sharing a pg_id corrupt per-stream latency stats on the box; the generator must flag the collision.',
+  'warning: next references missing stream':
+    'A chain "next" pointing at a deleted or disabled stream would raise at load time on TRex; caught here instead.',
+  'warning: var and tuple write to the same offset':
+    'A Field-Engine variable and the tuple generator writing the same packet offset silently overwrite each other; the generator warns.',
+  'tuple generator emission (tuple_var + writes + fix_chksum)':
+    'Structural check that the tuple generator emits vm.tuple_var, both .ip/.port writes and a checksum fix - the standard many-clients pattern.',
+  'backend bridge: unavailable by default (file:// / no server), API surface present':
+    'The optional Flask backend (pcap Browse, server-side validate) must report unavailable when absent while keeping its full JS API surface, so the UI degrades gracefully.',
+  'version registry: 3.06 resolves, unknown version does not':
+    'The per-TRex-version generator registry: v3.06 resolves to functions, an unknown version returns null instead of crashing - the mechanism future TRex versions plug into.',
+  'persist: save/load/delete profile round-trip':
+    'localStorage persistence: save a profile, read it back identical, delete it, confirm it is gone.',
+  'ASTF golden: pcap mode (http_simple-like)':
+    'The baseline ASTF profile: one replayed pcap with ip generator pools, matching the shipped astf/http_simple.py. Full-file golden.',
+  'ASTF golden: rampup_sec (param_sch_rampup-like)':
+    'ASTFGlobalInfo scheduler ramp-up on the client side, matching astf/param_ipv6.py-style global-info emission. Full-file golden.',
+  'ASTF program mode (http_manual_commands-like)':
+    'Structural check of a scripted HTTP exchange: client/server ASTFProgram command lists, payload variable pooling, and template/association wiring, per the shipped http_manual_commands.py.',
+  'ASTF program loop (http_manual_commands_loop-like)':
+    'Counted server-side loop: set_var / set_label / delay_rand / jmp_nz emission in order.',
+  'ASTF two weighted templates (template_groups-like)':
+    'Two templates with different cps weights and tg_names on different ports - verifies the _1/_2 variable suffixing and template list assembly.',
+  'ASTF elephant flow: looped sends + recv len(buf) * N (http_eflow-like)':
+    'The elephant-flow preset pattern (v0.15.0): server loops 100 x 64 KB sends; the client recv of the exact total must emit len(http_response) * 100 with no warning.',
+  'ASTF warning: recv still warns when not a multiple of any peer send':
+    'Regression guard for the multiple-detection above: a recv count that is NOT a clean multiple of any peer send must still produce the mismatch warning.',
+  'ASTF UDP program (stream=False, send_msg/recv_msg)':
+    'UDP programs: ASTFProgram(stream=False) with send_msg/recv_msg and pooled payload variables - the shape the DNS/SIP/RTP presets generate.',
+  'ASTF round-trip: model -> JSON -> parse -> regenerate identical':
+    'Same JSON round-trip guarantee as the STL one, over the weighted-templates fixture.',
+  'ASTF warning: templates share association port':
+    'Two templates on one association port is ambiguous for the TRex server side; must warn.',
+  'ASTF warning: jmp_nz to unknown label':
+    'A loop jump to a label that was never set would raise on the box; caught here.',
+  'ASTF warning: rampup_sec on server side only':
+    'The CPS ramp is driven by the client scheduler; setting it only on the server does nothing and must warn.',
+  'ASTF warning: recv bytes mismatch vs peer sends':
+    'A literal recv byte count that matches no peer send indicates a miscounted program; must warn.',
+  'scenario A (ASTF): runbook has server-only + client-mask + start line':
+    'The two-server scenario wizard (ASTF): generated runbook must contain the --astf-server-only box, the --astf-client-mask box and the console start line.',
+  'scenario A (STL): TX-only profile + latency stream + measure-side runbook':
+    'The two-server wizard in STL form: a TX-only profile with a latency stream and a runbook that explains measuring on the receiver.',
+  'scenario B (STL): staggered-isg streams with additive pps':
+    'The connection-ramp wizard (STL): three streams whose staggered isg values and additive pps build the low/mid/high ramp.',
+  'scenario B (ASTF rampup): high cps + rampup_sec = 2 stages':
+    'The ramp wizard (ASTF, rampup flavour): full cps with scheduler rampup_sec spanning two stage durations.',
+  'scenario B (ASTF m-step): runbook multipliers mid/low and high/low':
+    'The ramp wizard (ASTF, -m stepping flavour): the runbook must show the correct mid/low and high/low console multipliers.',
+  'scenario B: validation rejects non-increasing stages':
+    'Wizard input validation: stage rates must strictly increase (low < mid < high) or generation refuses with errors.',
+  'cap2 golden: dns.yaml-like profile':
+    'The baseline legacy STF YAML: one pcap entry with generator ranges, matching the shipped cap2/dns.yaml. Full-file golden.',
+  'cap2: dyn_pyload + global flags (dyn_pyld1-like)':
+    'The dyn_pyload payload-rewrite feature plus global one_app_server/vlan flags, per cap2/dyn_pyld1.yaml.',
+  'cap2 structure: leading dash + single-element list shape':
+    'YAML shape guard: the profile must be a single-element list ("- duration:...") - the exact indentation TRex\'s legacy parser requires.',
+  'cap2 warnings: bad cps, overlapping ranges, plugin hint, dyn_pyload checks':
+    'Four warning paths in one sweep: non-positive cps, client/server range overlap, plugin_id without dyn_pyload, and dyn_pyload field validation.',
+  'cap2 round-trip: model -> JSON -> parse -> regenerate identical':
+    'JSON round-trip guarantee for cap2 models.',
+  'cfg golden: IP mode (simple_cfg-like)':
+    'The baseline trex_cfg.yaml in IP/gateway mode, matching the shipped cfg/simple_cfg.yaml. Full-file golden.',
+  'cfg golden: MAC + platform (xl710-like)':
+    'trex_cfg.yaml in MAC mode with a platform section (master/latency thread ids, dual_if core pinning), per the shipped xl710 example.',
+  'cfg structure: 2-socket + memory (x710_advance-like)':
+    'A two-socket NUMA layout with a memory section - verifies multi-dual_if emission per the x710_advance example.',
+  'cfg structure: leading dash + single-element list shape':
+    'Same YAML single-element-list shape guard as cap2, for the platform config.',
+  'cli table: command lines per mode':
+    'The CLI builder\'s command assembly: correct t-rex-64 flags for stl, astf and legacy modes.',
+  'cli console: interactive start lines and server-only note':
+    'The generated console snippet: start -f ... -m ... -d ... lines, tui, and the server-only note when applicable.',
+  'summary: CLI restated in English':
+    'The "What this does" box for CLI commands: the flags restated as plain-English sentences.',
+  'summary: cap2 dyn_pyload described in words':
+    'Summary phrasing for the dyn_pyload feature - offset, packet and program described readably.',
+  'summary: ASTF program template described in words':
+    'Summary phrasing for scripted ASTF programs: sends/receives/delays joined into a sentence.',
+  'summary: scenario runbooks gain WHAT THE PROFILE DOES section':
+    'Scenario wizard runbooks must embed the profile\'s own summary under a WHAT THE PROFILE DOES heading.',
+  'summary: unknown kind/version returns empty (no crash)':
+    'Defensive check: summarising null, an unknown kind, or an unregistered TRex version returns [] instead of throwing.',
+  'cli warnings: cfg missing, server-only+mult, stl -l, bad mask, both flags':
+    'Five CLI warning paths in one sweep: missing --cfg, -m with server-only, -l in STL mode, non-hex client mask, and mutually exclusive server-only + client-mask.',
+  'cfg warnings: thread collision, core excess, mixed modes, iface count, cross-wiring':
+    'Five platform-config warning paths: latency thread colliding with data threads, more cores than threads, mixed MAC/IP port modes, interface/port_limit mismatch, and dest MACs that are not cross-wired.',
+  'docs: every registered test has a write-up on this page':
+    'Meta-test: walks the registered test list and fails if any test name is missing from the documentation map that renders these descriptions - so a new test cannot land undocumented.'
+};
+
+/* Section headers inserted before the named test. */
+var TEST_SECTIONS = {
+  'golden: minimal cont UDP with size tunable (udp_1pkt_simple-like)': {
+    title: 'STL generator — goldens',
+    blurb: 'Full-file comparisons of generated STL Python against expected output derived from TRex-shipped examples. One changed character fails the test and prints the first differing line.' },
+  'warning: VM next_var references unknown variable': {
+    title: 'STL generator — behaviour, warnings, round-trip',
+    blurb: 'Deliberately broken models must produce the right warning; valid models must survive a JSON save/load round-trip byte-identically.' },
+  'backend bridge: unavailable by default (file:// / no server), API surface present': {
+    title: 'App plumbing',
+    blurb: 'The version registry, localStorage persistence and the optional Flask backend bridge.' },
+  'ASTF golden: pcap mode (http_simple-like)': {
+    title: 'ASTF generator',
+    blurb: 'Goldens and structural checks for stateful profiles: pcap replay lists, scripted client/server programs, loops, UDP messages and the warning paths.' },
+  'scenario A (ASTF): runbook has server-only + client-mask + start line': {
+    title: 'Scenario wizards',
+    blurb: 'The two-server and connection-ramp wizards: generated profiles, runbooks and input validation.' },
+  'cap2 golden: dns.yaml-like profile': {
+    title: 'cap2 (legacy STF) generator',
+    blurb: 'YAML goldens, shape guards for TRex\'s strict legacy parser, and warning sweeps.' },
+  'cfg golden: IP mode (simple_cfg-like)': {
+    title: 'Platform config (trex_cfg.yaml) generator',
+    blurb: 'IP and MAC mode goldens, NUMA/memory structure checks and misconfiguration warnings.' },
+  'cli table: command lines per mode': {
+    title: 'CLI builder & plain-English summaries',
+    blurb: 'Command assembly per mode, console snippets, and the "What this does" phrasing that is embedded in every generated file header.' }
+};
+
+test('docs: every registered test has a write-up on this page', function () {
+  var missing = tests.filter(function (t) { return !TEST_DOCS[t.name]; }).map(function (t) { return t.name; });
+  return { pass: !missing.length, detail: missing.length ? 'undocumented: ' + TB.util.escapeHtml(missing.join(' | ')) : '' };
+});
+
 /* ---------------- run ---------------- */
 var results = document.getElementById('results');
 var passCount = 0;
+var t0 = performance.now();
 tests.forEach(function (t) {
   var out;
   try { out = t.fn(); }
   catch (e) { out = { pass: false, detail: 'threw: ' + TB.util.escapeHtml(e.message) }; }
+  var sec = TEST_SECTIONS[t.name];
+  if (sec) {
+    var head = document.createElement('div');
+    head.className = 'section-head';
+    head.textContent = sec.title;
+    results.appendChild(head);
+    var blurb = document.createElement('p');
+    blurb.className = 'section-blurb';
+    blurb.textContent = sec.blurb;
+    results.appendChild(blurb);
+  }
   var div = document.createElement('div');
   div.className = 'test ' + (out.pass ? 'pass' : 'fail');
   div.innerHTML = (out.pass ? 'PASS ' : 'FAIL ') + TB.util.escapeHtml(t.name) +
+    (TEST_DOCS[t.name] ? '<div class="test-doc">' + TB.util.escapeHtml(TEST_DOCS[t.name]) + '</div>' : '') +
     (out.pass || !out.detail ? '' : '<pre class="diff">' + out.detail + '</pre>');
   results.appendChild(div);
   if (out.pass) { passCount++; }
 });
+var elapsed = Math.round(performance.now() - t0);
 document.getElementById('summary').textContent = passCount + ' / ' + tests.length + ' tests passed';
 document.getElementById('summary').style.color = passCount === tests.length ? '#3fb950' : '#f85149';
+document.getElementById('run-meta').textContent = 'This run: ' + new Date().toLocaleString() +
+  ' · ' + elapsed + ' ms · executed in this browser on page load';
 </script>
 </body>
 </html>

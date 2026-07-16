@@ -4,7 +4,7 @@
   var TB = root.TB = root.TB || {};
 
   /* App version - bump the minor number with each feature release (commit batch). */
-  TB.APP_VERSION = '0.15.0';
+  TB.APP_VERSION = '0.16.0';
 
   var TABS = [
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },
@@ -72,6 +72,13 @@
       class: 'btn btn-secondary', text: 'Import workspace',
       onclick: function () { importInput.click(); }
     }));
+    var testsLink = el('a', {
+      class: 'app-tests-link', text: 'self tests ↗',
+      title: 'Open the self-test suite - runs all generator tests in a new tab'
+    });
+    testsLink.href = 'tests.html';
+    testsLink.target = '_blank';
+    wsActions.appendChild(testsLink);
     wsActions.appendChild(el('span', {
       class: 'app-version', text: 'app v' + TB.APP_VERSION,
       title: 'TRex Profile & Config Builder version'
