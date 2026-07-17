@@ -205,6 +205,93 @@
     return out;
   }
 
+  /* ---------------- GTP-U tunnels topology (astf/gtpu_topo.py-like) ---------------- */
+
+  function ip2num(ip) {
+    var p = ip.split('.');
+    return ((+p[0]) << 24 >>> 0) + ((+p[1]) << 16) + ((+p[2]) << 8) + (+p[3]);
+  }
+
+  function topoOn(model) {
+    return !!(model.tunnelsTopo && model.tunnelsTopo.enabled);
+  }
+
+  function topoWarnings(model, warnings) {
+    var ctxs = model.tunnelsTopo.ctxs || [];
+    if (!ctxs.length) {
+      warnings.push('GTP-U topology is ON but has no tunnel contexts; nothing will be tunneled.');
+      return;
+    }
+    var pool = model.ipGen && model.ipGen.client;
+    var ps = pool && TB.util.isIpv4(pool.start) ? ip2num(pool.start) : null;
+    var pe = pool && TB.util.isIpv4(pool.end) ? ip2num(pool.end) : null;
+    ctxs.forEach(function (c, i) {
+      var label = 'GTP-U context ' + (i + 1);
+      if (!TB.util.isIpv4(c.srcStart) || !TB.util.isIpv4(c.srcEnd)) {
+        warnings.push(label + ': src_start/src_end must be IPv4 addresses (client-pool addresses are always IPv4).');
+        return;
+      }
+      var cs = ip2num(c.srcStart), ce = ip2num(c.srcEnd);
+      if (cs > ce) { warnings.push(label + ': src_start is above src_end.'); }
+      if (ps !== null && pe !== null && (cs < ps || ce > pe)) {
+        warnings.push(label + ': range ' + c.srcStart + '-' + c.srcEnd +
+          ' is outside the client pool ' + pool.start + '-' + pool.end + '; those clients will never exist.');
+      }
+      if (c.version === 6) {
+        if (!TB.util.isIpv6(c.srcIp) || !TB.util.isIpv6(c.dstIp)) {
+          warnings.push(label + ': version 6 needs IPv6 outer src/dst endpoints.');
+        }
+      } else if (!TB.util.isIpv4(c.srcIp) || !TB.util.isIpv4(c.dstIp)) {
+        warnings.push(label + ': version 4 needs IPv4 outer src/dst endpoints.');
+      }
+      for (var j = i + 1; j < ctxs.length; j++) {
+        var o = ctxs[j];
+        if (TB.util.isIpv4(o.srcStart) && TB.util.isIpv4(o.srcEnd) &&
+            Math.max(cs, ip2num(o.srcStart)) <= Math.min(ce, ip2num(o.srcEnd))) {
+          warnings.push(label + ' and context ' + (j + 1) + ': client ranges overlap; each client needs exactly one tunnel.');
+        }
+      }
+    });
+  }
+
+  /* Companion topology file: module-level get_topo() returning TunnelsTopo,
+   * loaded in the console with "tunnels_topo load -f <file>" before start. */
+  function topoFileLines(model, opts, fileBase) {
+    var py = TB.gen.py;
+    var lines = py.header({
+      title: 'ASTF GTP-U tunnels topology (load before the profile)',
+      date: opts.now || TB.util.todayIso(),
+      trexVersion: model.trexVersion || '3.06',
+      validate: 'trex console: tunnels_topo load -f ' + fileBase + '_topo.py',
+      modelFile: fileBase + '.trexb.json'
+    });
+    lines.push('from trex.astf.api import *');
+    lines.push('from trex.astf.tunnels_topo import TunnelsTopo');
+    lines.push('');
+    lines.push('');
+    lines.push('def get_topo():');
+    lines.push('    topo = TunnelsTopo()');
+    (model.tunnelsTopo.ctxs || []).forEach(function (c) {
+      lines.push('');
+      lines.push('    topo.add_tunnel_ctx(');
+      lines.push("        src_start = " + py.sq(c.srcStart) + ',');
+      lines.push("        src_end = " + py.sq(c.srcEnd) + ',');
+      lines.push('        initial_teid = ' + py.num(c.initialTeid) + ',');
+      lines.push('        teid_jump = ' + py.num(c.teidJump) + ',');
+      lines.push('        sport = ' + py.num(c.sport) + ',');
+      lines.push('        version = ' + py.num(c.version || 4) + ',');
+      lines.push('        tunnel_type = 1,  # GTP-U');
+      lines.push("        src_ip = " + py.sq(c.srcIp) + ',');
+      lines.push("        dst_ip = " + py.sq(c.dstIp) + ',');
+      lines.push('        activate = ' + (c.activate === false ? 'False' : 'True'));
+      lines.push('    )');
+    });
+    lines.push('');
+    lines.push('    return topo');
+    lines.push('');
+    return lines;
+  }
+
   function generate(model, opts) {
     opts = opts || {};
     var py = TB.gen.py;
@@ -379,10 +466,14 @@
     lines.push('    return ASTFGenProfile()');
     lines.push('');
 
-    return {
-      files: [{ name: fileBase + '.py', language: 'python', content: lines.join('\n') }],
-      warnings: warnings
-    };
+    var files = [{ name: fileBase + '.py', language: 'python', content: lines.join('\n') }];
+    if (topoOn(model)) {
+      topoWarnings(model, warnings);
+      files.push({ name: fileBase + '_topo.py', language: 'python',
+                   content: topoFileLines(model, opts, fileBase).join('\n') });
+    }
+
+    return { files: files, warnings: warnings };
   }
 
   TB.gen.astfHttpReq = HTTP_REQ;

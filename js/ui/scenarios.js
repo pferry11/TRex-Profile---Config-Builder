@@ -38,17 +38,79 @@
           ]));
           return;
         }
-        var bar = el('div', { class: 'output-actions' });
-        bar.appendChild(el('button', {
-          class: 'btn', text: 'Open in ' + (res.model.kind === 'stl' ? 'STL' : 'ASTF') + ' builder',
-          onclick: function () { openInBuilder(res.model); }
-        }));
-        box.appendChild(bar);
+        if (res.model) {
+          var bar = el('div', { class: 'output-actions' });
+          bar.appendChild(el('button', {
+            class: 'btn', text: 'Open in ' + (res.model.kind === 'stl' ? 'STL' : 'ASTF') + ' builder',
+            onclick: function () { openInBuilder(res.model); }
+          }));
+          box.appendChild(bar);
+        }
         var out = el('div', {});
         box.appendChild(out);
         TB.ui.output.render(out, { result: { files: res.files, warnings: res.warnings },
-          model: res.model, validateKind: res.model.kind });
+          model: res.model, validateKind: res.model ? res.model.kind : null });
       }
+
+      /* ================= Wizard C: connectivity check ================= */
+      (function () {
+        var o = {
+          name: 'conn_check', ping0Dst: '48.0.0.1', ping1Dst: '16.0.0.1', pingCount: 5,
+          withLatency: true, latPps: 100, srcIp: '16.0.0.1', dstIp: '48.0.0.1',
+          durationSec: 30, cores: 2
+        };
+        var body = el('div', {});
+        var resBox = resultBox();
+
+        function render() {
+          body.innerHTML = '';
+          body.appendChild(el('div', { class: 'info-note',
+            text: 'Not a load test: proves ARP resolution, ICMP routing in both directions and (optionally) ' +
+                  'data-plane forwarding with latency numbers - run this before any traffic scenario.' }));
+
+          var r1 = el('div', { class: 'field-row' });
+          r1.appendChild(field({ label: 'Name', type: 'text', value: o.name, width: '120px',
+            onChange: function (v) { o.name = v || 'conn_check'; } }));
+          r1.appendChild(field({ label: 'Port 0 pings', tip: TB.help.scenarios.pingDst, type: 'text', value: o.ping0Dst, width: '110px',
+            validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+            onChange: function (v) { o.ping0Dst = v || ''; } }));
+          r1.appendChild(field({ label: 'Port 1 pings', tip: TB.help.scenarios.pingDst, type: 'text', value: o.ping1Dst, width: '110px',
+            validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+            onChange: function (v) { o.ping1Dst = v || ''; } }));
+          r1.appendChild(field({ label: 'Pings (-n)', type: 'int', value: o.pingCount, width: '60px',
+            onChange: function (v) { o.pingCount = v === null ? 5 : v; } }));
+          r1.appendChild(field({ label: 'Cores (-c)', type: 'int', value: o.cores, width: '60px',
+            onChange: function (v) { o.cores = v === null ? 2 : v; } }));
+          body.appendChild(r1);
+
+          var r2 = el('div', { class: 'field-row' });
+          r2.appendChild(field({ label: 'Add latency probe profile', tip: TB.help.scenarios.latencyProbe,
+            type: 'checkbox', value: o.withLatency,
+            onChange: function (v) { o.withLatency = v; render(); } }));
+          if (o.withLatency) {
+            r2.appendChild(field({ label: 'Probe src IP', type: 'text', value: o.srcIp, width: '110px',
+              validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+              onChange: function (v) { o.srcIp = v || ''; } }));
+            r2.appendChild(field({ label: 'Probe dst IP', type: 'text', value: o.dstIp, width: '110px',
+              validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+              onChange: function (v) { o.dstIp = v || ''; } }));
+            r2.appendChild(field({ label: 'Probe pps', tip: TB.help.scenarios.probePps, type: 'float', value: o.latPps, width: '80px',
+              onChange: function (v) { o.latPps = v === null ? 100 : v; } }));
+            r2.appendChild(field({ label: 'Duration (-d, sec)', type: 'int', value: o.durationSec, width: '80px',
+              onChange: function (v) { o.durationSec = v === null ? 30 : v; } }));
+          }
+          body.appendChild(r2);
+
+          body.appendChild(el('button', { class: 'btn btn-generate', text: 'Generate bundle',
+            onclick: function () {
+              o.trexVersion = TB.settings.get().defaults.trexVersion;
+              showResult(resBox, TB.scenarios.buildConnCheck(TB.util.deepClone(o)));
+            } }));
+          body.appendChild(resBox);
+        }
+        render();
+        wrap.appendChild(TB.ui.section('Scenario: connectivity check — prove routing before load', body, true, TB.help.scenarios._sections.connCheck));
+      })();
 
       /* ================= Wizard A: two-server send/receive ================= */
       (function () {

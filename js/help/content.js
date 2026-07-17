@@ -102,8 +102,18 @@
         globals: 'Optional per-side (client/server) tuning: TCP stack parameters, IPv6, and the CPS ramp-up scheduler.',
         cap: 'One replayed pcap: TRex re-plays the captured flow, rewriting IPs from the generator pools.',
         template: 'One traffic template: a client program and a server program tied together on an association port.',
-        presets: 'Ready-made profiles: DNS/SIP/RTP UDP programs, an SFR-style multi-pcap enterprise mix, and an elephant-flow throughput soak (http_eflow.py pattern). Loading one replaces the current entries; everything stays editable afterwards.'
+        presets: 'Ready-made profiles: DNS/SIP/RTP UDP programs, HTTPS via TLS pcap, an SFR-style multi-pcap enterprise mix, and an elephant-flow throughput soak (http_eflow.py pattern). Loading one replaces the current entries; everything stays editable afterwards.',
+        tunnelsTopo: 'Mobile-network testing (astf/gtpu_topo.py): wraps each client\'s traffic in a GTP-U tunnel with its own TEID. Generates a companion _topo.py file loaded in the console with "tunnels_topo load" before starting the profile.'
       },
+      topoOn: 'Adds a second generated file defining TunnelsTopo contexts. Client-side packets are GTP-U encapsulated per the contexts below; the profile itself is unchanged.',
+      topoSrcRange: 'The slice of the CLIENT pool this tunnel context covers (always IPv4). Each client in the slice gets its own TEID.',
+      topoTeid: 'TEID assigned to the first client in the range.',
+      topoTeidJump: 'TEID increment between consecutive clients.',
+      topoSport: 'Outer UDP source port of the GTP-U encapsulation (destination is the standard 2152).',
+      topoVersion: 'IP version of the OUTER tunnel packet. The inner client addresses stay IPv4.',
+      topoSrcIp: 'Outer tunnel source endpoint (e.g. the simulated eNodeB/gNB address).',
+      topoDstIp: 'Outer tunnel destination endpoint (e.g. the UPF/SGW under test).',
+      topoActivate: 'Untick to define the context without activating it at load time (activate later from the API).',
       profileName: 'Name used for the generated .py file and when saving/loading in the app.',
       mode: 'pcap list: replay captured flows (easiest, realistic). program: script the exchange yourself with send/recv commands.',
       clientRange: 'Client-side IP pool; TRex sources connections from these addresses.',
@@ -164,11 +174,15 @@
     },
 
     scenarios: {
-      _tab: 'Guided wizards for the two common test setups: a two-box send/receive run, and a low-to-mid-to-high connection ramp. Each generates a ready profile plus a step-by-step RUNBOOK.',
+      _tab: 'Guided wizards for common test setups: a connectivity pre-check, a two-box send/receive run, and a low-to-mid-to-high connection ramp. Each generates a step-by-step RUNBOOK (plus a ready profile where one is needed).',
       _sections: {
+        connCheck: 'Prove the network path works before generating any load: service-mode ARP + ICMP ping from the console (no profile needed), plus an optional near-zero-rate latency probe stream that shows average/jitter/max through the DUT.',
         twoServer: 'One TRex box plays the traffic client, a second box plays the server; both load the SAME profile with different CLI flags.',
         ramp: 'Grow the offered load in three stages using the mechanism that best fits your test.'
       },
+      pingDst: 'IPv4 address this port pings - use an address on the FAR side so the reply proves routing through the DUT, not just the local gateway.',
+      latencyProbe: 'Also generate a tiny STL profile: one 64-byte UDP latency stream (STLFlowLatencyStats) at a near-zero rate. The tui latency window then shows average/jitter/max and drop counts through the DUT.',
+      probePps: 'Probe rate. Keep it low (default 100 pps = ~50 kbit/s) - this validates the path, it is not a load test. Latency streams ignore the -m multiplier.',
       mechanismTwoServer: 'ASTF split (recommended): full TCP connections between the boxes. STL unidirectional: raw packets one way, counters on the receiver.',
       senderHost: 'Label for the client-side box used in the runbook text.',
       receiverHost: 'Label for the server-side box used in the runbook text.',

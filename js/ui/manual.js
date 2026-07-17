@@ -39,7 +39,10 @@
       ipGenOverride: 'IP generator override', tgName: 'Template group name', assocPort: 'Association port',
       transport: 'Transport', cmdSend: 'send command', cmdRecv: 'recv command', cmdDelay: 'delay command',
       cmdLoop: 'loop commands', httpBodyBytes: 'HTTP body bytes', tcpTuning: 'TCP tuning fields',
-      rampupSec: 'rampup_sec', ipv6: 'IPv6'
+      rampupSec: 'rampup_sec', ipv6: 'IPv6',
+      topoOn: 'GTP-U topology', topoSrcRange: 'Tunnel client range', topoTeid: 'Initial TEID',
+      topoTeidJump: 'TEID jump', topoSport: 'Tunnel src port', topoVersion: 'Outer IP version',
+      topoSrcIp: 'Outer src IP', topoDstIp: 'Outer dst IP', topoActivate: 'Activate'
     },
     cap2: {
       profileName: 'Profile name', duration: 'Duration', clientsRange: 'Clients range', serversRange: 'Servers range',
@@ -153,10 +156,17 @@
         '(send/recv, delays, counted loops). The HTTP presets generate realistic request/response payloads, and ' +
         '"auto" recv sizes always match the peer, like the shipped http_manual_commands example.</li></ul>' +
         '<h4>L7 presets</h4><p>One-click starting points that replace the current entries: <strong>DNS</strong>, ' +
-        '<strong>SIP</strong> and <strong>RTP</strong> UDP programs, an <strong>Enterprise mix</strong> ' +
-        '(SFR-style multi-pcap blend with representative cps weights), and an <strong>Elephant flow</strong> ' +
-        'throughput soak - one keep-alive connection whose server loops 100 x 64 KB sends with enlarged TCP buffers ' +
-        '(http_eflow.py pattern). Everything stays editable after loading.</p>' +
+        '<strong>SIP</strong> and <strong>RTP</strong> UDP programs, <strong>HTTPS (TLS)</strong> - TLS traffic the ' +
+        'v3.06 way, replaying the shipped TLS pcap like astf/http_https.py (newer TRex adds native TLS programs), ' +
+        'an <strong>Enterprise mix</strong> (SFR-style multi-pcap blend with representative cps weights), and an ' +
+        '<strong>Elephant flow</strong> throughput soak - one keep-alive connection whose server loops 100 x 64 KB ' +
+        'sends with enlarged TCP buffers (http_eflow.py pattern). Everything stays editable after loading.</p>' +
+        '<h4>GTP-U tunnel topology</h4><p>For mobile-network DUTs (UPF/SGW): the <strong>GTP-U tunnel topology</strong> ' +
+        'box generates a companion <code>&lt;profile&gt;_topo.py</code> alongside the profile. Each tunnel context ' +
+        'covers a slice of the client pool and assigns per-client TEIDs (initial + jump); the outer tunnel runs ' +
+        'between two endpoint IPs (v4 or v6). On the box, load it before starting: ' +
+        '<code>trex&gt; tunnels_topo load -f profile_topo.py</code>. The builder warns when a context falls outside ' +
+        'the client pool, ranges overlap, or endpoint IPs do not match the outer IP version.</p>' +
         '<h4>IP generator</h4><p>Client and server pools; connections are sourced from the client range towards the ' +
         'server range, which the receiver (or DUT) must route/answer.</p>' +
         '<h4>Global info</h4><p>Optional per-side TCP tuning (mss, buffers, keepalives), IPv6, and ' +
@@ -178,6 +188,14 @@
 
     { id: 'scenarios', title: 'Scenarios (wizards)', html: function () {
       return tabIntro('scenarios') +
+        '<h4>Connectivity check - prove routing before load</h4>' +
+        '<p>Not a load test: a console-only runbook that validates the path end to end. Step 1 brings the ports up ' +
+        'and resolves next hops (<code>service</code> mode + <code>arp -p 0 1</code>); step 2 pings a far-side ' +
+        'address from each port (<code>ping -p 0 -d ...</code>) - replies in both directions prove ARP and IP ' +
+        'routing through the DUT, and each reply prints an RTT. Optionally the wizard adds a tiny STL profile with ' +
+        'one 64-byte latency stream at a near-zero rate: the tui latency window then shows average/jitter/max and ' +
+        'drop counts across the data plane. The runbook ends with a failure-interpretation table (ARP vs one-way ' +
+        'ping vs ICMP-only paths).</p>' +
         '<h4>Two servers - one sends, one receives</h4>' +
         '<p>Both boxes load the <strong>same ASTF profile</strong>; the flags decide the role:</p>' +
         '<ul><li>Receiver: <code>./t-rex-64 -i --astf --astf-server-only ...</code> - answers connections only.</li>' +
@@ -279,10 +297,11 @@
         ['STL builder', 'More packet presets', 'ICMP echo, ARP, DNS-query payloads, IPv6 extension headers and fragments (see stl/udp_1pkt_dns.py, udp_1pkt_frag.py).', 'Medium', 'done'],
         ['STL builder', 'IMIX preset button', 'One click to load the classic 60/590/1514 three-stream IMIX table.', 'Small', 'done'],
         ['STL builder', 'Richer field engine', 'Dependent variables, write offset fixups, per-core split control (stl/dependent_field_engine_vars.py, split_var_to_cores.py).', 'Medium', 'done'],
-        ['ASTF builder', 'HTTPS/TLS traffic', 'In v3.06 via TLS pcaps (avl/delay_10_https_0.pcap preset); newer TRex adds native TLS program support.', 'Medium', 'planned'],
+        ['ASTF builder', 'HTTPS/TLS traffic', 'In v3.06 via TLS pcaps (avl/delay_10_https_0.pcap preset); newer TRex adds native TLS program support.', 'Medium', 'done'],
         ['ASTF builder', 'L7 protocol presets', 'One-click DNS/SIP/RTP UDP programs and an EMIX/SFR-style multi-pcap enterprise mix preset.', 'Small', 'done'],
         ['ASTF builder', 'Elephant-flow preset', 'Long keep-alive template with looped large sends (astf/http_eflow.py pattern) for throughput soak tests.', 'Small', 'done'],
-        ['ASTF builder', 'GTP-U tunnel topology', 'Mobile-network testing via tunnels_topo (astf/gtpu_topo.py): per-connection GTP-U encapsulation with TEID ranges.', 'Large', 'planned'],
+        ['ASTF builder', 'GTP-U tunnel topology', 'Mobile-network testing via tunnels_topo (astf/gtpu_topo.py): per-connection GTP-U encapsulation with TEID ranges.', 'Large', 'done'],
+        ['Scenarios', 'Connectivity check', 'Prove L2/L3 + routing before any load test: service-mode ARP/ping runbook, optional low-rate latency probe profile.', 'Small', 'done'],
         ['Scenarios', 'NDR benchmark wizard', 'Drive the shipped ./ndr script: find the no-drop rate automatically instead of manual -m stepping.', 'Medium', 'planned'],
         ['Scenarios', 'N-stage ramp', 'Generalise the low/mid/high wizard to any number of stages.', 'Small', 'planned'],
         ['Scenarios', 'Bidirectional two-server', 'Both boxes run client AND server roles simultaneously (client masks on both sides).', 'Medium', 'planned'],

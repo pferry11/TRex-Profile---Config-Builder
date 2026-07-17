@@ -964,6 +964,61 @@ astfContains('ASTF UDP program (stream=False, send_msg/recv_msg)', fxAstfUdp, [
   'prog_s.send_msg(payload_2)'
 ]);
 
+var fxAstfGtpu = (function () {
+  var m = astfModel('gtpu_like', {
+    capList: [{ file: '../avl/delay_10_http_browsing_0.pcap', cps: 1, port: null, sDelayUsec: null, ipGenOverride: null }]
+  });
+  m.tunnelsTopo = { enabled: true, ctxs: [
+    { srcStart: '16.0.0.1', srcEnd: '16.0.0.100', initialTeid: 0, teidJump: 1,
+      sport: 5000, version: 4, srcIp: '1.1.1.11', dstIp: '12.2.2.2', activate: true },
+    { srcStart: '16.0.0.101', srcEnd: '16.0.0.200', initialTeid: 1000, teidJump: 2,
+      sport: 5001, version: 4, srcIp: '1.1.1.12', dstIp: '12.2.2.2', activate: false }
+  ] };
+  return m;
+})();
+
+test('ASTF GTP-U topology: companion _topo.py with tunnel contexts (gtpu_topo-like)', function () {
+  var r = agen(fxAstfGtpu, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  if (r.files.length !== 2) { return { pass: false, detail: 'expected 2 files, got ' + r.files.length }; }
+  if (r.files[1].name !== 'gtpu_like_topo.py') { return { pass: false, detail: 'topo file name: ' + r.files[1].name }; }
+  var c = r.files[1].content;
+  var needles = [
+    'from trex.astf.tunnels_topo import TunnelsTopo',
+    'def get_topo():',
+    "        src_start = '16.0.0.1',",
+    '        initial_teid = 1000,',
+    '        teid_jump = 2,',
+    '        tunnel_type = 1,  # GTP-U',
+    "        src_ip = '1.1.1.12',",
+    '        activate = False',
+    '    return topo'
+  ];
+  for (var i = 0; i < needles.length; i++) {
+    if (c.indexOf(needles[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(needles[i]) }; }
+  }
+  var summaryHit = r.files[0].content.indexOf('GTP-U tunnel topology (2 contexts)') !== -1;
+  return { pass: summaryHit, detail: summaryHit ? '' : 'profile header lacks the GTP-U summary line' };
+});
+
+test('ASTF GTP-U warnings: outside pool, overlap, version/endpoint mismatch', function () {
+  var fails = [];
+  var m = JSON.parse(JSON.stringify(fxAstfGtpu));
+  m.tunnelsTopo.ctxs[0].srcStart = '99.0.0.1';
+  m.tunnelsTopo.ctxs[0].srcEnd = '99.0.0.100';
+  if (!agen(m, NOW).warnings.some(function (w) { return w.indexOf('outside the client pool') !== -1; })) { fails.push('pool'); }
+  m = JSON.parse(JSON.stringify(fxAstfGtpu));
+  m.tunnelsTopo.ctxs[1].srcStart = '16.0.0.50';
+  if (!agen(m, NOW).warnings.some(function (w) { return w.indexOf('ranges overlap') !== -1; })) { fails.push('overlap'); }
+  m = JSON.parse(JSON.stringify(fxAstfGtpu));
+  m.tunnelsTopo.ctxs[0].version = 6;
+  if (!agen(m, NOW).warnings.some(function (w) { return w.indexOf('version 6 needs IPv6') !== -1; })) { fails.push('v6'); }
+  m = JSON.parse(JSON.stringify(fxAstfGtpu));
+  m.tunnelsTopo.ctxs = [];
+  if (!agen(m, NOW).warnings.some(function (w) { return w.indexOf('no tunnel contexts') !== -1; })) { fails.push('empty'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
 test('ASTF round-trip: model -> JSON -> parse -> regenerate identical', function () {
   var once = agen(fxAstfGroups, NOW).files[0].content;
   var twice = agen(JSON.parse(JSON.stringify(fxAstfGroups)), NOW).files[0].content;
@@ -1003,6 +1058,50 @@ test('ASTF warning: recv bytes mismatch vs peer sends', function () {
 });
 
 /* ================= Scenario wizard suite ================= */
+
+test('scenario C (connectivity): ping/arp runbook + latency probe profile', function () {
+  var r = TB.scenarios.buildConnCheck({
+    name: 'conn_check', ping0Dst: '48.0.0.1', ping1Dst: '16.0.0.1', pingCount: 5,
+    withLatency: true, latPps: 100, srcIp: '16.0.0.1', dstIp: '48.0.0.1',
+    durationSec: 30, cores: 2, now: '2026-07-06'
+  });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var names = r.files.map(function (f) { return f.name; }).join(',');
+  if (names !== 'conn_check.py,RUNBOOK.txt') { return { pass: false, detail: 'files: ' + names }; }
+  var rb = r.files[1].content;
+  var need = [
+    'trex> service',
+    'trex> arp -p 0 1',
+    'trex> ping -p 0 -d 48.0.0.1 -n 5',
+    'trex> ping -p 1 -d 16.0.0.1 -n 5',
+    'trex> service --off',
+    'start -f conn_check.py -p 0 -m 1 -d 30',
+    'INTERPRETING FAILURES'
+  ];
+  for (var i = 0; i < need.length; i++) {
+    if (rb.indexOf(need[i]) === -1) { return { pass: false, detail: 'runbook missing: ' + TB.util.escapeHtml(need[i]) }; }
+  }
+  var p = r.files[0].content;
+  var okProfile = p.indexOf('STLTXCont(pps=100)') !== -1 &&
+                  p.indexOf('flow_stats=STLFlowLatencyStats(pg_id=1 + port_id)') !== -1;
+  return { pass: okProfile, detail: okProfile ? '' : 'profile lacks the 100 pps latency stream' };
+});
+
+test('scenario C (connectivity): runbook-only when latency probe is off + IP validation', function () {
+  var r = TB.scenarios.buildConnCheck({
+    name: 'ping_only', ping0Dst: '48.0.0.1', ping1Dst: '16.0.0.1', pingCount: 3,
+    withLatency: false, now: '2026-07-06'
+  });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  if (r.files.length !== 1 || r.files[0].name !== 'RUNBOOK.txt') {
+    return { pass: false, detail: 'expected only RUNBOOK.txt, got: ' + r.files.map(function (f) { return f.name; }).join(',') };
+  }
+  if (r.model !== null) { return { pass: false, detail: 'expected no model in ping-only mode' }; }
+  if (r.files[0].content.indexOf('STEP 3') !== -1) { return { pass: false, detail: 'ping-only runbook must not have STEP 3' }; }
+  var bad = TB.scenarios.buildConnCheck({ name: 'x', ping0Dst: 'not-an-ip', ping1Dst: '16.0.0.1', pingCount: 5, withLatency: false });
+  var caught = !bad.ok && bad.errors.some(function (e) { return e.indexOf('Port 0 ping destination') !== -1; });
+  return { pass: caught, detail: caught ? '' : 'invalid ping IP not rejected' };
+});
 
 test('scenario A (ASTF): runbook has server-only + client-mask + start line', function () {
   var r = TB.scenarios.buildTwoServer({
@@ -1508,6 +1607,14 @@ var TEST_DOCS = {
     'The CPS ramp is driven by the client scheduler; setting it only on the server does nothing and must warn.',
   'ASTF warning: recv bytes mismatch vs peer sends':
     'A literal recv byte count that matches no peer send indicates a miscounted program; must warn.',
+  'ASTF GTP-U topology: companion _topo.py with tunnel contexts (gtpu_topo-like)':
+    'The GTP-U tunnels topology (v0.17.0): a profile with topology enabled must emit a second file, <name>_topo.py, containing a module-level get_topo() that builds TunnelsTopo contexts (src range, TEID start/jump, sport, outer endpoints, activate flag) exactly like the shipped astf/gtpu_topo.py - and the main profile header must summarise the topology.',
+  'ASTF GTP-U warnings: outside pool, overlap, version/endpoint mismatch':
+    'Four topology warning paths: a context range outside the client pool (those clients never exist), two contexts overlapping (a client may only have one tunnel), outer version 6 with IPv4 endpoints, and topology enabled with no contexts at all.',
+  'scenario C (connectivity): ping/arp runbook + latency probe profile':
+    'The connectivity-check wizard (v0.17.0): the runbook must walk service mode -> arp -p 0 1 -> ping from each port -> service --off (console syntax verified against the shipped v3.06 client), and the optional probe profile must contain exactly one low-rate 64-byte latency stream (STLFlowLatencyStats, pg_id 1 + port_id).',
+  'scenario C (connectivity): runbook-only when latency probe is off + IP validation':
+    'With the latency probe unticked the wizard must emit ONLY RUNBOOK.txt (no profile, no model, no STEP 3), and an invalid ping destination IP must be rejected with a clear error.',
   'scenario A (ASTF): runbook has server-only + client-mask + start line':
     'The two-server scenario wizard (ASTF): generated runbook must contain the --astf-server-only box, the --astf-client-mask box and the console start line.',
   'scenario A (STL): TX-only profile + latency stream + measure-side runbook':
@@ -1574,9 +1681,9 @@ var TEST_SECTIONS = {
   'ASTF golden: pcap mode (http_simple-like)': {
     title: 'ASTF generator',
     blurb: 'Goldens and structural checks for stateful profiles: pcap replay lists, scripted client/server programs, loops, UDP messages and the warning paths.' },
-  'scenario A (ASTF): runbook has server-only + client-mask + start line': {
+  'scenario C (connectivity): ping/arp runbook + latency probe profile': {
     title: 'Scenario wizards',
-    blurb: 'The two-server and connection-ramp wizards: generated profiles, runbooks and input validation.' },
+    blurb: 'The connectivity-check, two-server and connection-ramp wizards: generated profiles, runbooks and input validation.' },
   'cap2 golden: dns.yaml-like profile': {
     title: 'cap2 (legacy STF) generator',
     blurb: 'YAML goldens, shape guards for TRex\'s strict legacy parser, and warning sweeps.' },

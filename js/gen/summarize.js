@@ -182,6 +182,17 @@
     }
     lines.push('Total offered load: ' + Math.round(total * 1000) / 1000 + ' connections/s at -m 1.');
 
+    if (model.tunnelsTopo && model.tunnelsTopo.enabled) {
+      var ctxs = model.tunnelsTopo.ctxs || [];
+      var parts = ctxs.map(function (c) {
+        return c.srcStart + '-' + c.srcEnd + ' via ' + c.srcIp + ' -> ' + c.dstIp +
+          ' (TEIDs from ' + c.initialTeid + ' step ' + c.teidJump + ')' +
+          (c.activate === false ? ' [inactive]' : '');
+      });
+      lines.push('GTP-U tunnel topology (' + n(ctxs.length, 'context') + '): ' + parts.join('; ') +
+        '. Load the _topo.py file first: tunnels_topo load -f <file>.');
+    }
+
     var cg = model.globals && model.globals.client;
     if (cg && cg.scheduler && cg.scheduler.rampupSec) {
       lines.push('CPS ramps linearly to the full rate over ' + cg.scheduler.rampupSec + ' s (client side).');

@@ -121,6 +121,14 @@
             { op: 'recv_msg', count: 50 }
           ] } })];
       } },
+    { label: 'HTTPS (TLS)', title: 'TLS traffic the v3.06 way (astf/http_https.py): replays the shipped TLS pcap alongside plain HTTP browsing. Newer TRex releases add native TLS programs.',
+      apply: function (model) {
+        model.mode = 'pcap';
+        model.capList = [
+          { file: '../avl/delay_10_http_browsing_0.pcap', cps: 1, port: null, sDelayUsec: null, ipGenOverride: null },
+          { file: '../avl/delay_10_https_0.pcap', cps: 1, port: null, sDelayUsec: null, ipGenOverride: null }
+        ];
+      } },
     { label: 'Enterprise mix (SFR)', title: 'SFR-style multi-pcap enterprise mix: browsing, mail, oracle, citrix, DNS... Rates are representative - tune per test.',
       apply: function (model) {
         model.mode = 'pcap';
@@ -187,7 +195,10 @@
       globals: { client: sideGlobals(), server: sideGlobals() },
       mode: 'pcap',
       capList: [defaultCap()],
-      templates: [defaultTemplate(1)]
+      templates: [defaultTemplate(1)],
+      tunnelsTopo: { enabled: false,
+        ctxs: [{ srcStart: '16.0.0.1', srcEnd: '16.0.0.255', initialTeid: 0, teidJump: 1,
+                 sport: 5000, version: 4, srcIp: '1.1.1.11', dstIp: '12.2.2.2', activate: true }] }
     };
   }
 
@@ -204,11 +215,13 @@
 
       var topbar = el('div', { class: 'builder-topbar' });
       var presetBox = el('div', { class: 'tunables-box' });
+      var topoBox = el('div', { class: 'tunables-box' });
       var listPane = el('div', { class: 'pane pane-list' });
       var editorPane = el('div', { class: 'pane pane-editor' });
       var outputPane = el('div', { class: 'pane pane-output' });
       container.appendChild(topbar);
       container.appendChild(presetBox);
+      container.appendChild(topoBox);
       container.appendChild(el('div', { class: 'builder-panes' }, [listPane, editorPane, outputPane]));
 
       function renderPresets() {
@@ -227,6 +240,62 @@
             } }));
         });
         presetBox.appendChild(TB.ui.section('L7 presets', body, false, TB.help.astf._sections.presets));
+      }
+
+      /* ---------- GTP-U tunnels topology ---------- */
+      function defaultTopoCtx() {
+        return { srcStart: '16.0.0.1', srcEnd: '16.0.0.255', initialTeid: 0, teidJump: 1,
+                 sport: 5000, version: 4, srcIp: '1.1.1.11', dstIp: '12.2.2.2', activate: true };
+      }
+
+      function renderTopo() {
+        topoBox.innerHTML = '';
+        if (!model.tunnelsTopo) {   /* models saved before this feature */
+          model.tunnelsTopo = { enabled: false, ctxs: [defaultTopoCtx()] };
+        }
+        var topo = model.tunnelsTopo;
+        var body = el('div', {});
+        body.appendChild(field({ label: 'Generate a GTP-U tunnels topology file alongside the profile',
+          tip: TB.help.astf.topoOn, type: 'checkbox', value: topo.enabled,
+          onChange: function (v) { topo.enabled = v; renderTopo(); regen(); } }));
+        if (topo.enabled) {
+          topo.ctxs.forEach(function (c, idx) {
+            var row = el('div', { class: 'field-row' });
+            row.appendChild(field({ label: 'Clients from', tip: TB.help.astf.topoSrcRange, type: 'text', value: c.srcStart, width: '100px',
+              validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+              onChange: function (v) { c.srcStart = v || ''; regen(); } }));
+            row.appendChild(field({ label: 'to', type: 'text', value: c.srcEnd, width: '100px',
+              validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+              onChange: function (v) { c.srcEnd = v || ''; regen(); } }));
+            row.appendChild(field({ label: 'Initial TEID', tip: TB.help.astf.topoTeid, type: 'int', value: c.initialTeid, width: '80px',
+              onChange: function (v) { c.initialTeid = v === null ? 0 : v; regen(); } }));
+            row.appendChild(field({ label: 'TEID jump', tip: TB.help.astf.topoTeidJump, type: 'int', value: c.teidJump, width: '70px',
+              onChange: function (v) { c.teidJump = v === null ? 1 : v; regen(); } }));
+            row.appendChild(field({ label: 'Src port', tip: TB.help.astf.topoSport, type: 'int', value: c.sport, width: '70px',
+              onChange: function (v) { c.sport = v === null ? 5000 : v; regen(); } }));
+            row.appendChild(field({ label: 'Outer IP ver', tip: TB.help.astf.topoVersion, type: 'select', value: String(c.version || 4),
+              options: [{ value: '4', label: 'IPv4' }, { value: '6', label: 'IPv6' }],
+              onChange: function (v) { c.version = parseInt(v, 10); regen(); } }));
+            row.appendChild(field({ label: 'Outer src IP', tip: TB.help.astf.topoSrcIp, type: 'text', value: c.srcIp, width: '110px',
+              onChange: function (v) { c.srcIp = v || ''; regen(); } }));
+            row.appendChild(field({ label: 'Outer dst IP', tip: TB.help.astf.topoDstIp, type: 'text', value: c.dstIp, width: '110px',
+              onChange: function (v) { c.dstIp = v || ''; regen(); } }));
+            row.appendChild(field({ label: 'Active', tip: TB.help.astf.topoActivate, type: 'checkbox', value: c.activate !== false,
+              onChange: function (v) { c.activate = v; regen(); } }));
+            row.appendChild(el('button', { class: 'btn btn-small btn-danger', text: '✕',
+              onclick: function () { topo.ctxs.splice(idx, 1); renderTopo(); regen(); } }));
+            body.appendChild(row);
+          });
+          body.appendChild(el('button', { class: 'btn btn-small', text: '+ Add tunnel context',
+            onclick: function () {
+              topo.ctxs.push(defaultTopoCtx());
+              renderTopo(); regen();
+            } }));
+          body.appendChild(el('div', { class: 'info-note',
+            text: 'The topology downloads as <profile>_topo.py. On the box, load it BEFORE starting: trex> tunnels_topo load -f <profile>_topo.py' }));
+        }
+        topoBox.appendChild(TB.ui.section('GTP-U tunnel topology (tunnels_topo)' + (topo.enabled ? ' — ACTIVE' : ''),
+          body, topo.enabled, TB.help.astf._sections.tunnelsTopo));
       }
 
       function items() { return model.mode === 'pcap' ? model.capList : model.templates; }
@@ -635,6 +704,7 @@
       function renderAll() {
         renderTopbar();
         renderPresets();
+        renderTopo();
         renderList();
         renderEditor();
         regen();
