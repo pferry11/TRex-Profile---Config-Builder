@@ -54,7 +54,10 @@
     },
     scenarios: {
       mechanismTwoServer: 'Two-server mechanism', senderHost: 'Sender box', receiverHost: 'Receiver box',
-      rampMechanism: 'Ramp mechanism', stageRates: 'Stage rates', stageSec: 'Stage duration'
+      bidirectional: 'Bidirectional', rampMechanism: 'Ramp mechanism', rampStages: 'Stage rates', stageSec: 'Stage duration',
+      pingDst: 'Ping destination', latencyProbe: 'Latency probe', probePps: 'Probe rate',
+      ndrEngine: 'NDR engine', ndrRate: 'NDR profile rate', ndrPorts: 'NDR ports', ndrPdr: 'PDR %',
+      ndrMults: 'NDR search bounds', ndrQfull: 'q-full %', ndrLatGate: 'NDR latency gate'
     },
     cfg: { server: 'Server' },
     cli: {
@@ -203,13 +206,24 @@
         'in trex-console.</li></ul>' +
         '<p>The wizard emits the profile plus a RUNBOOK with those exact commands and a pre-flight checklist ' +
         '(the server box must own the server IP range; both ranges must route through the device under test). ' +
-        'The STL alternative sends one-way packets and reads raw counters on the receiver.</p>' +
-        '<h4>Connection ramp - low → mid → high</h4>' +
-        '<ul><li><strong>-m stepping</strong> (default): profile at the low rate; the runbook restarts with computed ' +
+        'The STL alternative sends one-way packets and reads raw counters on the receiver. Ticking ' +
+        '<strong>Bidirectional</strong> switches the runbook so BOTH boxes launch with ' +
+        '<code>--astf-client-mask 0x1</code> and both start the profile: each box initiates from its port 0 while ' +
+        'serving on the other port, giving simultaneous load in both directions (the DUT needs symmetric routing).</p>' +
+        '<h4>Connection ramp - N increasing stages</h4>' +
+        '<p>Enter any number of comma-separated stage rates (e.g. <code>100, 500, 1000, 2000</code>).</p>' +
+        '<ul><li><strong>-m stepping</strong> (default): profile at the first rate; the runbook restarts with computed ' +
         'multipliers per stage. Exact plateaus, but flows restart between stages.</li>' +
-        '<li><strong>rampup_sec</strong>: one profile at the high rate ramping linearly - smooth, no plateaus.</li>' +
-        '<li><strong>STL staggered-isg</strong>: three streams whose start delays add up to exact rate plateaus in a ' +
-        'single profile.</li></ul>' +
+        '<li><strong>rampup_sec</strong>: one profile at the top rate ramping linearly - smooth, no plateaus.</li>' +
+        '<li><strong>STL staggered-isg</strong>: one stream per stage whose start delays add up to exact rate ' +
+        'plateaus in a single profile.</li></ul>' +
+        '<h4>NDR benchmark - automated no-drop-rate search</h4>' +
+        '<p>Wraps the shipped <code>./ndr</code> tool: start an interactive TRex instance, then the generated command ' +
+        'binary-searches for the highest rate whose drops stay within your PDR (STL: percent of line rate, needs an ' +
+        'even <code>--ports</code> list; ASTF: a <code>-m</code> multiplier between explicit low/high bounds). ' +
+        'Options cover iteration time/count, the q-full threshold, an optional latency gate ' +
+        '(<code>--max-latency</code>/<code>--lat-tolerance</code>) and JSON result output. The wizard can generate a ' +
+        'simple profile to benchmark or point at any existing profile on the box.</p>' +
         '<p><em>Open in builder</em> drops the generated model into the STL/ASTF tab for further editing.</p>' +
         fieldTable('scenarios');
     } },
@@ -302,9 +316,9 @@
         ['ASTF builder', 'Elephant-flow preset', 'Long keep-alive template with looped large sends (astf/http_eflow.py pattern) for throughput soak tests.', 'Small', 'done'],
         ['ASTF builder', 'GTP-U tunnel topology', 'Mobile-network testing via tunnels_topo (astf/gtpu_topo.py): per-connection GTP-U encapsulation with TEID ranges.', 'Large', 'done'],
         ['Scenarios', 'Connectivity check', 'Prove L2/L3 + routing before any load test: service-mode ARP/ping runbook, optional low-rate latency probe profile.', 'Small', 'done'],
-        ['Scenarios', 'NDR benchmark wizard', 'Drive the shipped ./ndr script: find the no-drop rate automatically instead of manual -m stepping.', 'Medium', 'planned'],
-        ['Scenarios', 'N-stage ramp', 'Generalise the low/mid/high wizard to any number of stages.', 'Small', 'planned'],
-        ['Scenarios', 'Bidirectional two-server', 'Both boxes run client AND server roles simultaneously (client masks on both sides).', 'Medium', 'planned'],
+        ['Scenarios', 'NDR benchmark wizard', 'Drive the shipped ./ndr script: find the no-drop rate automatically instead of manual -m stepping.', 'Medium', 'done'],
+        ['Scenarios', 'N-stage ramp', 'Generalise the low/mid/high wizard to any number of stages.', 'Small', 'done'],
+        ['Scenarios', 'Bidirectional two-server', 'Both boxes run client AND server roles simultaneously (client masks on both sides).', 'Medium', 'done'],
         ['New domain', 'TRex-EMU profiles', 'Client emulation profiles: ARP, DHCPv4/v6, ICMP, IGMP, IPv6 ND, DNS/mDNS - a whole additional TRex subsystem.', 'Large', 'planned'],
         ['New domain', 'TPG configuration', 'Tagged Packet Group setup (tpg_tags_conf.json) for per-tag rx stats on DOT1Q/QinQ.', 'Medium', 'planned'],
         ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large', 'planned'],

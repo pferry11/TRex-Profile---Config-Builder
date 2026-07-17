@@ -1173,8 +1173,82 @@ test('scenario B (ASTF m-step): runbook multipliers mid/low and high/low', funct
 test('scenario B: validation rejects non-increasing stages', function () {
   var r = TB.scenarios.buildRamp({ engine: 'astf', low: 500, mid: 100, high: 1000, stageSec: 30,
     mechanism: 'm_step', traffic: 'http' });
-  var ok = !r.ok && r.errors.some(function (e) { return e.indexOf('low < mid < high') !== -1; });
+  var ok = !r.ok && r.errors.some(function (e) { return e.indexOf('strictly increase') !== -1; });
   return { pass: ok, detail: ok ? '' : JSON.stringify(r.errors || 'ok=true') };
+});
+
+test('scenario B: N-stage ramp generalises to 4 stages (STL + ASTF m-step)', function () {
+  var r = TB.scenarios.buildRamp({ engine: 'stl', name: 'ramp4', stages: [100, 500, 1000, 2000],
+    stageSec: 10, now: '2026-07-06' });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var m = r.model;
+  var names = m.streams.map(function (s) { return s.name; }).join(',');
+  var pps = m.streams.map(function (s) { return s.mode.pps; }).join(',');
+  var isg = m.streams.map(function (s) { return s.isgUsec; }).join(',');
+  if (names !== 'S_stage1,S_stage2,S_stage3,S_stage4') { return { pass: false, detail: 'names: ' + names }; }
+  if (pps !== '100,400,500,1000') { return { pass: false, detail: 'pps: ' + pps }; }
+  if (isg !== '0,10000000,20000000,30000000') { return { pass: false, detail: 'isg: ' + isg }; }
+  var r2 = TB.scenarios.buildRamp({ engine: 'astf', name: 'ramp4a', stages: [100, 500, 1000, 2000],
+    stageSec: 10, mechanism: 'm_step', traffic: 'http', now: '2026-07-06' });
+  if (!r2.ok) { return { pass: false, detail: r2.errors.join(' | ') }; }
+  var rb = r2.files[1].content;
+  var need = ['-m 1 -d 40', '-m 5 -d 30', '-m 10 -d 20', '-m 20 -d 10'];
+  for (var i = 0; i < need.length; i++) {
+    if (rb.indexOf(need[i]) === -1) { return { pass: false, detail: 'm-step runbook missing: ' + need[i] }; }
+  }
+  return { pass: true };
+});
+
+test('scenario A (ASTF bidirectional): client masks on both boxes, no server-only', function () {
+  var r = TB.scenarios.buildTwoServer({
+    mode: 'astf', name: 'bidir', senderHost: 'trex-a', receiverHost: 'trex-b',
+    clientStart: '16.0.0.1', clientEnd: '16.0.0.255', serverStart: '48.0.0.1', serverEnd: '48.0.255.255',
+    traffic: 'http', rate: 100, cores: 4, mult: 1, durationSec: 60, bidirectional: true, now: '2026-07-06'
+  });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var rb = r.files[1].content;
+  var masks = rb.split('sudo ./t-rex-64 -i --astf --astf-client-mask 0x1').length - 1;
+  var starts = rb.split('start -f bidir.py -m 1 -d 60').length - 1;
+  if (masks !== 2) { return { pass: false, detail: 'expected 2 client-mask launch lines, found ' + masks }; }
+  if (starts !== 2) { return { pass: false, detail: 'expected 2 start lines, found ' + starts }; }
+  if (rb.indexOf('--astf-server-only') !== -1) { return { pass: false, detail: 'bidirectional runbook must not use server-only' }; }
+  var ok = rb.indexOf('BOTH directions') !== -1 && rb.indexOf('symmetric routing') !== -1;
+  return { pass: ok, detail: ok ? '' : 'missing how-it-works / symmetric-routing notes' };
+});
+
+test('scenario D (NDR STL): verified ./ndr flags + generated profile', function () {
+  var r = TB.scenarios.buildNdr({
+    engine: 'stl', name: 'ndr_check', profileMode: 'generate', rate: 1000, frameSize: 64,
+    ports: '0 1', pdr: 0.5, pdrError: 1, iterTime: 20, maxIterations: 10, qFull: 2,
+    biDir: true, maxLatency: 100, latTolerance: 5, outputJson: true, cores: 4, now: '2026-07-06'
+  });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  var names = r.files.map(function (f) { return f.name; }).join(',');
+  if (names !== 'ndr_check.py,RUNBOOK.txt') { return { pass: false, detail: 'files: ' + names }; }
+  var rb = r.files[1].content;
+  var cmd = './ndr --stl --profile ndr_check.py --ports 0 1 -p 0.5 -e 1 -t 20 -x 10 -q 2 --bi-dir --max-latency 100 --lat-tolerance 5 -o ndr_check_results.json -v';
+  if (rb.indexOf(cmd) === -1) { return { pass: false, detail: 'command not found; runbook: ' + TB.util.escapeHtml(rb.slice(0, 500)) }; }
+  var ok = rb.indexOf('sudo ./t-rex-64 -i --stl') !== -1 && rb.indexOf('READING THE RESULT') !== -1;
+  return { pass: ok, detail: ok ? '' : 'missing server launch or result-reading section' };
+});
+
+test('scenario D (NDR ASTF): multiplier bounds required and emitted', function () {
+  var r = TB.scenarios.buildNdr({
+    engine: 'astf', name: 'ndr_astf', profileMode: 'path', profilePath: 'astf/udp_mix.py',
+    lowMult: 1, highMult: 200, allowedError: 1, latencyPps: 1000,
+    iterTime: 30, maxIterations: 8, qFull: 2, outputJson: false, cores: 4, now: '2026-07-06'
+  });
+  if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
+  if (r.files.length !== 1 || r.files[0].name !== 'RUNBOOK.txt') {
+    return { pass: false, detail: 'path mode must emit only RUNBOOK.txt, got: ' + r.files.map(function (f) { return f.name; }).join(',') };
+  }
+  var rb = r.files[0].content;
+  var cmd = './ndr --astf --profile astf/udp_mix.py --low-mult 1 --high-mult 200 -e 1 -t 30 -x 8 -q 2 -lpps 1000 -v';
+  if (rb.indexOf(cmd) === -1) { return { pass: false, detail: 'command not found; runbook: ' + TB.util.escapeHtml(rb.slice(0, 500)) }; }
+  var bad = TB.scenarios.buildNdr({ engine: 'astf', name: 'x', profileMode: 'path', profilePath: 'p.py',
+    iterTime: 20, maxIterations: 10 });
+  var caught = !bad.ok && bad.errors.some(function (e) { return e.indexOf('Low multiplier is required') !== -1; });
+  return { pass: caught, detail: caught ? '' : 'missing multiplier bounds not rejected' };
 });
 
 /* ================= cap2 (legacy STF) suite ================= */
@@ -1496,7 +1570,7 @@ test('summary: scenario runbooks gain WHAT THE PROFILE DOES section', function (
   if (!r.ok) { return { pass: false, detail: r.errors.join(' | ') }; }
   var rb = r.files[1].content;
   var ok = rb.indexOf('WHAT THE PROFILE DOES') !== -1 &&
-    rb.indexOf('  - S_low: transmits continuously at 100 pps') !== -1;
+    rb.indexOf('  - S_stage1: transmits continuously at 100 pps') !== -1;
   return { pass: ok, detail: TB.util.escapeHtml(rb.slice(rb.indexOf('WHAT'), rb.indexOf('WHAT') + 300)) };
 });
 
@@ -1626,7 +1700,15 @@ var TEST_DOCS = {
   'scenario B (ASTF m-step): runbook multipliers mid/low and high/low':
     'The ramp wizard (ASTF, -m stepping flavour): the runbook must show the correct mid/low and high/low console multipliers.',
   'scenario B: validation rejects non-increasing stages':
-    'Wizard input validation: stage rates must strictly increase (low < mid < high) or generation refuses with errors.',
+    'Wizard input validation: stage rates must strictly increase (each stage above the previous) or generation refuses with a clear error naming the offending stage.',
+  'scenario B: N-stage ramp generalises to 4 stages (STL + ASTF m-step)':
+    'The N-stage generalisation (v0.18.0): four stages must yield four STL streams (S_stage1..4) with correct additive deltas and staggered isg values, and the ASTF -m stepping runbook must emit one start line per stage with the right multiplier and remaining duration.',
+  'scenario A (ASTF bidirectional): client masks on both boxes, no server-only':
+    'The bidirectional two-server flavour (v0.18.0): the runbook must launch BOTH boxes with --astf-client-mask 0x1, contain two console start lines, never use --astf-server-only, and explain the simultaneous both-direction flow plus the symmetric-routing requirement.',
+  'scenario D (NDR STL): verified ./ndr flags + generated profile':
+    'The NDR benchmark wizard (v0.18.0), STL flavour: the exact ./ndr command line is asserted end-to-end (--profile, --ports, -p/-e/-t/-x/-q, --bi-dir, latency gate, -o JSON) - every flag verified against the shipped stl_ndr_bench_tool.py - alongside the generated probe profile and the interactive-server launch step.',
+  'scenario D (NDR ASTF): multiplier bounds required and emitted':
+    'The NDR wizard, ASTF flavour: existing-profile mode must emit only the runbook with --low-mult/--high-mult (REQUIRED by the shipped astf_ndr_bench_tool.py, which has no defaults) and -lpps, and omitting the bounds must be rejected with a clear error.',
   'cap2 golden: dns.yaml-like profile':
     'The baseline legacy STF YAML: one pcap entry with generator ranges, matching the shipped cap2/dns.yaml. Full-file golden.',
   'cap2: dyn_pyload + global flags (dyn_pyld1-like)':

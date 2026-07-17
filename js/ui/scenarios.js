@@ -119,7 +119,8 @@
           clientStart: '16.0.0.1', clientEnd: '16.0.0.255',
           serverStart: '48.0.0.1', serverEnd: '48.0.255.255',
           traffic: 'http', pcapFile: '../avl/delay_10_http_browsing_0.pcap',
-          rate: 100, cores: 4, mult: 1, durationSec: 60, rampupSec: null, addLatency: false
+          rate: 100, cores: 4, mult: 1, durationSec: 60, rampupSec: null, addLatency: false,
+          bidirectional: false
         };
         var body = el('div', {});
         var resBox = resultBox();
@@ -169,6 +170,9 @@
               onChange: function (v) { o.rate = v === null ? 1 : v; } }));
             r4.appendChild(field({ label: 'rampup_sec (opt.)', tip: TB.help.astf.rampupSec, type: 'int', value: o.rampupSec, width: '90px',
               onChange: function (v) { o.rampupSec = v; } }));
+            r4.appendChild(field({ label: 'Bidirectional (both boxes client + server)', tip: TB.help.scenarios.bidirectional,
+              type: 'checkbox', value: o.bidirectional,
+              onChange: function (v) { o.bidirectional = v; } }));
           } else {
             r4.appendChild(field({ label: 'pps', type: 'float', value: o.rate, width: '90px',
               onChange: function (v) { o.rate = v === null ? 1 : v; } }));
@@ -195,11 +199,17 @@
       /* ================= Wizard B: connection ramp ================= */
       (function () {
         var o = {
-          engine: 'astf', name: 'ramp', low: 100, mid: 500, high: 1000, stageSec: 30,
+          engine: 'astf', name: 'ramp', stagesText: '100, 500, 1000', stageSec: 30,
           mechanism: 'm_step', traffic: 'http', pcapFile: '../avl/delay_10_http_browsing_0.pcap'
         };
         var body = el('div', {});
         var resBox = resultBox();
+
+        function parseStages() {
+          return o.stagesText.split(',')
+            .map(function (s) { return parseFloat(s.trim()); })
+            .filter(function (x) { return !isNaN(x); });
+        }
 
         function render() {
           body.innerHTML = '';
@@ -216,12 +226,15 @@
 
           var unit = o.engine === 'astf' ? 'cps' : 'pps';
           var r2 = el('div', { class: 'field-row' });
-          r2.appendChild(field({ label: 'Low (' + unit + ')', type: 'float', value: o.low, width: '80px',
-            onChange: function (v) { o.low = v === null ? 0 : v; } }));
-          r2.appendChild(field({ label: 'Mid (' + unit + ')', type: 'float', value: o.mid, width: '80px',
-            onChange: function (v) { o.mid = v === null ? 0 : v; } }));
-          r2.appendChild(field({ label: 'High (' + unit + ')', type: 'float', value: o.high, width: '80px',
-            onChange: function (v) { o.high = v === null ? 0 : v; } }));
+          r2.appendChild(field({ label: 'Stage rates (' + unit + ', comma-separated, increasing)',
+            tip: TB.help.scenarios.rampStages, type: 'text', value: o.stagesText, width: '240px',
+            validate: function (v) {
+              var st = String(v || '').split(',').map(function (s) { return parseFloat(s.trim()); });
+              if (st.length < 2 || st.some(isNaN)) { return 'need 2+ numbers'; }
+              for (var i = 1; i < st.length; i++) { if (!(st[i] > st[i - 1])) { return 'must increase'; } }
+              return null;
+            },
+            onChange: function (v) { o.stagesText = v || ''; } }));
           r2.appendChild(field({ label: 'Stage duration (sec)', tip: TB.help.scenarios.stageSec, type: 'int', value: o.stageSec, width: '80px',
             onChange: function (v) { o.stageSec = v === null ? 0 : v; } }));
           body.appendChild(r2);
@@ -252,12 +265,109 @@
           body.appendChild(el('button', { class: 'btn btn-generate', text: 'Generate bundle',
             onclick: function () {
               o.trexVersion = TB.settings.get().defaults.trexVersion;
-              showResult(resBox, TB.scenarios.buildRamp(TB.util.deepClone(o)));
+              var args = TB.util.deepClone(o);
+              args.stages = parseStages();
+              showResult(resBox, TB.scenarios.buildRamp(args));
             } }));
           body.appendChild(resBox);
         }
         render();
-        wrap.appendChild(TB.ui.section('Scenario: connection ramp — low → mid → high', body, true, TB.help.scenarios._sections.ramp));
+        wrap.appendChild(TB.ui.section('Scenario: connection ramp — N increasing stages', body, true, TB.help.scenarios._sections.ramp));
+      })();
+
+      /* ================= Wizard D: NDR benchmark ================= */
+      (function () {
+        var o = {
+          engine: 'stl', name: 'ndr_bench', profileMode: 'generate', profilePath: 'stl/imix.py',
+          rate: 1000, frameSize: 64, ports: '0 1', pdr: 0.1, pdrError: 1,
+          allowedError: 1, lowMult: 1, highMult: 100, latencyPps: null,
+          iterTime: 20, maxIterations: 10, qFull: 2, biDir: false,
+          maxLatency: null, latTolerance: null, outputJson: true, cores: 4
+        };
+        var body = el('div', {});
+        var resBox = resultBox();
+
+        function render() {
+          body.innerHTML = '';
+          var r1 = el('div', { class: 'field-row' });
+          r1.appendChild(field({ label: 'Engine', tip: TB.help.scenarios.ndrEngine, type: 'select', value: o.engine,
+            options: [
+              { value: 'stl', label: 'STL - NDR in % of line rate' },
+              { value: 'astf', label: 'ASTF - NDR as a -m multiplier' }
+            ],
+            onChange: function (v) { o.engine = v; render(); } }));
+          r1.appendChild(field({ label: 'Name', type: 'text', value: o.name, width: '110px',
+            onChange: function (v) { o.name = v || 'ndr_bench'; } }));
+          r1.appendChild(field({ label: 'Profile', type: 'select', value: o.profileMode,
+            options: [
+              { value: 'generate', label: 'generate a simple profile' },
+              { value: 'path', label: 'use an existing profile on the box' }
+            ],
+            onChange: function (v) { o.profileMode = v; render(); } }));
+          if (o.profileMode === 'path') {
+            r1.appendChild(field({ label: 'Profile path', type: 'text', value: o.profilePath, width: '180px',
+              onChange: function (v) { o.profilePath = v || ''; } }));
+          } else {
+            r1.appendChild(field({ label: o.engine === 'stl' ? 'pps (shape only)' : 'cps at -m 1',
+              tip: TB.help.scenarios.ndrRate, type: 'float', value: o.rate, width: '90px',
+              onChange: function (v) { o.rate = v === null ? 1000 : v; } }));
+            if (o.engine === 'stl') {
+              r1.appendChild(field({ label: 'Frame size', type: 'int', value: o.frameSize, width: '70px',
+                onChange: function (v) { o.frameSize = v === null ? 64 : v; } }));
+            }
+          }
+          r1.appendChild(field({ label: 'Cores (-c)', type: 'int', value: o.cores, width: '60px',
+            onChange: function (v) { o.cores = v === null ? 4 : v; } }));
+          body.appendChild(r1);
+
+          var r2 = el('div', { class: 'field-row' });
+          if (o.engine === 'stl') {
+            r2.appendChild(field({ label: 'Ports (even list)', tip: TB.help.scenarios.ndrPorts, type: 'text', value: o.ports, width: '80px',
+              onChange: function (v) { o.ports = v || '0 1'; } }));
+            r2.appendChild(field({ label: 'PDR % drops (0 = NDR)', tip: TB.help.scenarios.ndrPdr, type: 'float', value: o.pdr, width: '80px',
+              onChange: function (v) { o.pdr = v === null ? 0.1 : v; } }));
+            r2.appendChild(field({ label: 'Error % (-e)', type: 'float', value: o.pdrError, width: '70px',
+              onChange: function (v) { o.pdrError = v === null ? 1 : v; } }));
+            r2.appendChild(field({ label: 'Bi-directional', type: 'checkbox', value: o.biDir,
+              onChange: function (v) { o.biDir = v; } }));
+          } else {
+            r2.appendChild(field({ label: 'Low mult', tip: TB.help.scenarios.ndrMults, type: 'int', value: o.lowMult, width: '70px',
+              onChange: function (v) { o.lowMult = v === null ? 1 : v; } }));
+            r2.appendChild(field({ label: 'High mult', tip: TB.help.scenarios.ndrMults, type: 'int', value: o.highMult, width: '70px',
+              onChange: function (v) { o.highMult = v === null ? 100 : v; } }));
+            r2.appendChild(field({ label: 'Allowed error % (-e)', type: 'float', value: o.allowedError, width: '80px',
+              onChange: function (v) { o.allowedError = v === null ? 1 : v; } }));
+            r2.appendChild(field({ label: 'Latency pps (opt.)', type: 'int', value: o.latencyPps, width: '90px',
+              onChange: function (v) { o.latencyPps = v; } }));
+          }
+          r2.appendChild(field({ label: 'Iter time (-t)', type: 'float', value: o.iterTime, width: '70px',
+            onChange: function (v) { o.iterTime = v === null ? 20 : v; } }));
+          r2.appendChild(field({ label: 'Max iters (-x)', type: 'int', value: o.maxIterations, width: '70px',
+            onChange: function (v) { o.maxIterations = v === null ? 10 : v; } }));
+          r2.appendChild(field({ label: 'q-full % (-q)', tip: TB.help.scenarios.ndrQfull, type: 'float', value: o.qFull, width: '70px',
+            onChange: function (v) { o.qFull = v === null ? 2 : v; } }));
+          body.appendChild(r2);
+
+          var r3 = el('div', { class: 'field-row' });
+          r3.appendChild(field({ label: 'Max latency µs (opt. gate)', tip: TB.help.scenarios.ndrLatGate, type: 'int', value: o.maxLatency, width: '90px',
+            onChange: function (v) { o.maxLatency = v; render(); } }));
+          if (o.maxLatency) {
+            r3.appendChild(field({ label: 'Lat tolerance %', tip: TB.help.scenarios.ndrLatGate, type: 'float', value: o.latTolerance, width: '80px',
+              onChange: function (v) { o.latTolerance = v; } }));
+          }
+          r3.appendChild(field({ label: 'Write JSON results (-o)', type: 'checkbox', value: o.outputJson,
+            onChange: function (v) { o.outputJson = v; } }));
+          body.appendChild(r3);
+
+          body.appendChild(el('button', { class: 'btn btn-generate', text: 'Generate bundle',
+            onclick: function () {
+              o.trexVersion = TB.settings.get().defaults.trexVersion;
+              showResult(resBox, TB.scenarios.buildNdr(TB.util.deepClone(o)));
+            } }));
+          body.appendChild(resBox);
+        }
+        render();
+        wrap.appendChild(TB.ui.section('Scenario: NDR benchmark — find the no-drop rate (./ndr)', body, true, TB.help.scenarios._sections.ndr));
       })();
     }
   };

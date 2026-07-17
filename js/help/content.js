@@ -174,12 +174,22 @@
     },
 
     scenarios: {
-      _tab: 'Guided wizards for common test setups: a connectivity pre-check, a two-box send/receive run, and a low-to-mid-to-high connection ramp. Each generates a step-by-step RUNBOOK (plus a ready profile where one is needed).',
+      _tab: 'Guided wizards for common test setups: a connectivity pre-check, a two-box send/receive run (one-way or bidirectional), an N-stage connection ramp, and an automated NDR benchmark. Each generates a step-by-step RUNBOOK (plus a ready profile where one is needed).',
       _sections: {
         connCheck: 'Prove the network path works before generating any load: service-mode ARP + ICMP ping from the console (no profile needed), plus an optional near-zero-rate latency probe stream that shows average/jitter/max through the DUT.',
-        twoServer: 'One TRex box plays the traffic client, a second box plays the server; both load the SAME profile with different CLI flags.',
-        ramp: 'Grow the offered load in three stages using the mechanism that best fits your test.'
+        twoServer: 'One TRex box plays the traffic client, a second box plays the server; both load the SAME profile with different CLI flags. Tick "Bidirectional" for both boxes to run client AND server roles simultaneously.',
+        ramp: 'Grow the offered load through any number of increasing stages using the mechanism that best fits your test.',
+        ndr: 'Drives the shipped ./ndr tool: it binary-searches for the No-Drop Rate against a running interactive TRex instance - no manual -m stepping. STL finds a % of line rate; ASTF finds a -m multiplier between your low/high bounds.'
       },
+      rampStages: 'Any number of stage rates, comma-separated and strictly increasing, e.g. "100, 500, 1000, 2000". Each stage runs for the stage duration.',
+      bidirectional: 'Both boxes launch with --astf-client-mask 0x1 and both start the profile: each box initiates connections from its port 0 while serving on the other port, so traffic flows in both directions simultaneously.',
+      ndrEngine: 'STL searches transmit rate as % of line rate (needs --ports). ASTF searches the -m multiplier between explicit low/high bounds (the shipped tool has no defaults for them).',
+      ndrRate: 'For a generated profile this sets the traffic shape (STL stream pps / ASTF cps at -m 1); the benchmark scales it during the search.',
+      ndrPorts: 'Even list of port ids the benchmark transmits on, e.g. "0 1" (pairs).',
+      ndrPdr: 'Allowed drop percentage. 0 = strict No-Drop Rate; e.g. 0.1 = 0.1% drops tolerated (PDR).',
+      ndrMults: 'ASTF search bounds: the tool binary-searches -m between low and high. NDR cps = profile cps x found multiplier.',
+      ndrQfull: 'Percent of traffic allowed to sit queued in TX before the rate counts as beyond DUT capability. 0 is not recommended (precision).',
+      ndrLatGate: 'Optional latency gate: a rate also fails if latency exceeds max-latency (usec) for more than lat-tolerance % of probes (0% = compare against the max seen).',
       pingDst: 'IPv4 address this port pings - use an address on the FAR side so the reply proves routing through the DUT, not just the local gateway.',
       latencyProbe: 'Also generate a tiny STL profile: one 64-byte UDP latency stream (STLFlowLatencyStats) at a near-zero rate. The tui latency window then shows average/jitter/max and drop counts through the DUT.',
       probePps: 'Probe rate. Keep it low (default 100 pps = ~50 kbit/s) - this validates the path, it is not a load test. Latency streams ignore the -m multiplier.',

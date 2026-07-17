@@ -135,6 +135,44 @@
       }
       if (opts.rampupSec) { model.globals.client.scheduler.rampupSec = opts.rampupSec; }
 
+      if (opts.bidirectional) {
+        runbook = [
+          'TRex two-server run - BIDIRECTIONAL (both boxes run client AND server roles)',
+          'Generated: ' + now + '   Target: TRex v' + (opts.trexVersion || '3.06'),
+          'Both boxes load the SAME profile file: ' + name + '.py',
+          '',
+          'Box A (' + (opts.senderHost || 'box-a') + '):',
+          '    cd <trex dir>',
+          '    sudo ./t-rex-64 -i --astf --astf-client-mask 0x1 --cfg /etc/trex_cfg.yaml -c ' + cores,
+          '    # in a second terminal:',
+          '    ./trex-console',
+          '    trex> start -f ' + name + '.py -m ' + mult + ' -d ' + opts.durationSec,
+          '',
+          'Box B (' + (opts.receiverHost || 'box-b') + ') - the SAME commands:',
+          '    cd <trex dir>',
+          '    sudo ./t-rex-64 -i --astf --astf-client-mask 0x1 --cfg /etc/trex_cfg.yaml -c ' + cores,
+          '    ./trex-console',
+          '    trex> start -f ' + name + '.py -m ' + mult + ' -d ' + opts.durationSec,
+          '',
+          'HOW IT WORKS',
+          '  - --astf-client-mask 0x1: on EACH box, port 0 initiates connections',
+          '    (client role) while the remaining port(s) answer as servers.',
+          '  - With both boxes started, connections flow in BOTH directions',
+          '    simultaneously: A port 0 -> B server port, and B port 0 -> A server port.',
+          '  - Start the two boxes within a few seconds of each other for symmetric load;',
+          '    -m scales each box independently (set the same value on both).',
+          '  - Each box reports its own client-side CPS/flows; aggregate = sum of both.',
+          '',
+          checklistLines(opts).join('\n'),
+          '',
+          'NOTES',
+          '  - BOTH boxes must route/answer the server range AND reach it as clients:',
+          '    the DUT needs symmetric routing for ' + opts.clientStart + '-' + opts.clientEnd,
+          '    and ' + opts.serverStart + '-' + opts.serverEnd + ' on both port pairs.',
+          (opts.rampupSec ? '  - rampup_sec=' + opts.rampupSec + ' ramps CPS linearly on each client side.' : null),
+          '  - Adjust the hex bitmask if your client ports differ (0x1 = port 0).'
+        ].filter(function (l) { return l !== null; }).join('\n') + '\n';
+      } else {
       runbook = [
         'TRex two-server run - one sends (client side), one receives (server side)',
         'Generated: ' + now + '   Target: TRex v' + (opts.trexVersion || '3.06'),
@@ -159,6 +197,7 @@
         '  - --astf-client-mask 0x1 = port 0 acts as client on the sender box;',
         '    adjust the hex bitmask if your client ports differ.'
       ].filter(function (l) { return l !== null; }).join('\n') + '\n';
+      }
     } else {
       model = {
         kind: 'stl', schemaVersion: 1, trexVersion: opts.trexVersion || '3.06',
@@ -212,14 +251,26 @@
 
   /* ---------------- Scenario B: connection ramp low -> mid -> high ---------------- */
 
-  /* opts: { engine:'astf'|'stl', name, trexVersion, low, mid, high, stageSec,
+  /* opts: { engine:'astf'|'stl', name, trexVersion, stageSec,
+   *         stages: [r1, r2, ... rN] (any number, strictly increasing)
+   *           - or legacy low/mid/high for a 3-stage ramp,
    *         mechanism:'rampup'|'m_step'|'weighted' (astf only),
    *         traffic:'http'|'pcap', pcapFile,
    *         clientStart..serverEnd (defaults provided), cores, frameSize, now } */
   function buildRamp(opts) {
+    var stages = (Array.isArray(opts.stages) && opts.stages.length)
+      ? opts.stages.slice()
+      : [opts.low, opts.mid, opts.high];
     var errors = [];
-    if (!(opts.low > 0 && opts.mid > 0 && opts.high > 0)) { errors.push('All three stage rates must be greater than 0.'); }
-    if (!(opts.low < opts.mid && opts.mid < opts.high)) { errors.push('Stages must increase: low < mid < high.'); }
+    if (stages.length < 2) { errors.push('At least two stages are required.'); }
+    if (!stages.every(function (s) { return s > 0; })) { errors.push('All stage rates must be greater than 0.'); }
+    for (var si = 1; si < stages.length; si++) {
+      if (!(stages[si] > stages[si - 1])) {
+        errors.push('Stages must strictly increase: stage ' + (si + 1) + ' (' + stages[si] +
+          ') is not above stage ' + si + ' (' + stages[si - 1] + ').');
+        break;
+      }
+    }
     if (!(opts.stageSec > 0)) { errors.push('Stage duration must be greater than 0.'); }
     if (opts.engine === 'astf' && opts.traffic === 'pcap' && !opts.pcapFile) {
       errors.push('Pcap file path is required for pcap traffic.');
@@ -229,15 +280,18 @@
     var name = (opts.name || 'ramp').replace(/[^\w.-]+/g, '_');
     var now = opts.now || TB.util.todayIso();
     var cores = opts.cores || 4;
-    var total = opts.stageSec * 3;
+    var N = stages.length;
+    var total = opts.stageSec * N;
+    var first = stages[0];
+    var last = stages[N - 1];
     var ranges = {
       clientStart: opts.clientStart || '16.0.0.1', clientEnd: opts.clientEnd || '16.0.0.255',
       serverStart: opts.serverStart || '48.0.0.1', serverEnd: opts.serverEnd || '48.0.255.255'
     };
     var model, runbook;
     var head = [
-      'TRex connection ramp: ' + opts.low + ' -> ' + opts.mid + ' -> ' + opts.high +
-        (opts.engine === 'astf' ? ' cps' : ' pps') + ', ' + opts.stageSec + ' s per stage',
+      'TRex connection ramp: ' + stages.join(' -> ') +
+        (opts.engine === 'astf' ? ' cps' : ' pps') + ', ' + N + ' stages x ' + opts.stageSec + ' s',
       'Generated: ' + now + '   Target: TRex v' + (opts.trexVersion || '3.06'),
       ''
     ];
@@ -259,29 +313,31 @@
         }
       }
 
+      /* per-stage deltas: stage 1 full rate, later stages add the difference */
+      var deltas = stages.map(function (s, i) { return round3(i === 0 ? s : s - stages[i - 1]); });
+
       if (opts.mechanism === 'rampup') {
-        withTraffic([opts.high]);
-        model.globals.client.scheduler.rampupSec = opts.stageSec * 2;
+        withTraffic([last]);
+        model.globals.client.scheduler.rampupSec = opts.stageSec * (N - 1);
         runbook = head.concat([
           'Mechanism: scheduler.rampup_sec (linear client-side ramp, no plateaus)',
-          '  - profile cps = ' + opts.high + ' (the HIGH stage), rampup_sec = ' + (opts.stageSec * 2),
-          '  - CPS grows linearly and reaches the high rate after ' + (opts.stageSec * 2) + ' s.',
+          '  - profile cps = ' + last + ' (the top stage), rampup_sec = ' + (opts.stageSec * (N - 1)),
+          '  - CPS grows linearly and reaches the top rate after ' + (opts.stageSec * (N - 1)) + ' s.',
           '',
           'Run (single start):',
           '    sudo ./t-rex-64 -i --astf --cfg /etc/trex_cfg.yaml -c ' + cores,
           '    ./trex-console',
           '    trex> start -f ' + name + '.py -m 1 -d ' + total,
           '',
-          'NOTE: this is a smooth linear ramp; if you need discrete low/mid/high',
+          'NOTE: this is a smooth linear ramp; if you need discrete stage',
           'plateaus, regenerate with the "-m stepping" mechanism.'
         ]).join('\n') + '\n';
       } else if (opts.mechanism === 'weighted') {
-        withTraffic([opts.low, opts.mid - opts.low, opts.high - opts.mid], ['low', 'mid', 'high']);
+        withTraffic(deltas, stages.map(function (_, i) { return 'stage' + (i + 1); }));
         runbook = head.concat([
           'Mechanism: weighted multi-template mix (APPROXIMATION)',
-          '  - three templates with cps ' + round3(opts.low) + ' / ' + round3(opts.mid - opts.low) +
-            ' / ' + round3(opts.high - opts.mid) + ' summing to ' + opts.high + ' cps.',
-          '  - This is a STEADY mix at the high rate, not a time-based ramp;',
+          '  - ' + N + ' templates with cps ' + deltas.join(' / ') + ' summing to ' + last + ' cps.',
+          '  - This is a STEADY mix at the top rate, not a time-based ramp;',
           '    use it as a weighted-traffic preset, or combine with rampup_sec.',
           '',
           'Run:',
@@ -290,45 +346,46 @@
           '    trex> start -f ' + name + '.py -m 1 -d ' + total
         ]).join('\n') + '\n';
       } else { /* m_step - default */
-        withTraffic([opts.low]);
-        var mMid = round3(opts.mid / opts.low);
-        var mHigh = round3(opts.high / opts.low);
-        runbook = head.concat([
+        withTraffic([first]);
+        var seq = [
           'Mechanism: -m multiplier stepping (discrete plateaus)',
-          '  - profile cps = ' + opts.low + ' at -m 1; each stage rescales with -m.',
+          '  - profile cps = ' + first + ' at -m 1; each stage rescales with -m.',
           '  - CAVEAT: each stop/start restarts flows between stages.',
           '',
           'Console sequence:',
           '    sudo ./t-rex-64 -i --astf --cfg /etc/trex_cfg.yaml -c ' + cores,
           '    ./trex-console',
-          '    trex> start -f ' + name + '.py -m 1 -d ' + total + '        # LOW: ' + opts.low + ' cps',
-          '    # wait ' + opts.stageSec + ' s',
-          '    trex> stop',
-          '    trex> start -f ' + name + '.py -m ' + mMid + ' -d ' + (opts.stageSec * 2) + '   # MID: ' + opts.mid + ' cps',
-          '    # wait ' + opts.stageSec + ' s',
-          '    trex> stop',
-          '    trex> start -f ' + name + '.py -m ' + mHigh + ' -d ' + opts.stageSec + '   # HIGH: ' + opts.high + ' cps'
-        ]).join('\n') + '\n';
+          '    trex> start -f ' + name + '.py -m 1 -d ' + total + '        # stage 1: ' + first + ' cps'
+        ];
+        for (var mi = 1; mi < N; mi++) {
+          seq.push('    # wait ' + opts.stageSec + ' s');
+          seq.push('    trex> stop');
+          seq.push('    trex> start -f ' + name + '.py -m ' + round3(stages[mi] / first) +
+            ' -d ' + (opts.stageSec * (N - mi)) + '   # stage ' + (mi + 1) + ': ' + stages[mi] + ' cps');
+        }
+        runbook = head.concat(seq).join('\n') + '\n';
       }
     } else {
       /* STL: additive staggered-isg continuous streams -> exact plateaus */
-      var s1 = opts.stageSec * 1000000;
+      var stageUsec = opts.stageSec * 1000000;
+      var streams = [];
+      var lines = [];
+      stages.forEach(function (s, i) {
+        var delta = round3(i === 0 ? s : s - stages[i - 1]);
+        streams.push(stlStream('S_stage' + (i + 1), delta, stageUsec * i, ranges, opts.frameSize));
+        lines.push('  - S_stage' + (i + 1) + ' : ' + (i === 0 ? '' : '+') + delta +
+          ' pps, starts at t=' + (opts.stageSec * i) + ' s' + (i === 0 ? '' : ' (isg)'));
+      });
       model = {
         kind: 'stl', schemaVersion: 1, trexVersion: opts.trexVersion || '3.06',
         meta: { name: name, description: 'generated by scenario wizard', modified: '' },
         tunables: [],
-        streams: [
-          stlStream('S_low', round3(opts.low), 0, ranges, opts.frameSize),
-          stlStream('S_mid', round3(opts.mid - opts.low), s1, ranges, opts.frameSize),
-          stlStream('S_high', round3(opts.high - opts.mid), s1 * 2, ranges, opts.frameSize)
-        ]
+        streams: streams
       };
       runbook = head.concat([
-        'Mechanism: additive staggered-isg continuous streams (exact plateaus)',
-        '  - S_low  : ' + round3(opts.low) + ' pps, starts at t=0',
-        '  - S_mid  : +' + round3(opts.mid - opts.low) + ' pps, starts at t=' + opts.stageSec + ' s (isg)',
-        '  - S_high : +' + round3(opts.high - opts.mid) + ' pps, starts at t=' + (opts.stageSec * 2) + ' s (isg)',
-        '  - aggregate rate steps ' + opts.low + ' -> ' + opts.mid + ' -> ' + opts.high + ' pps.',
+        'Mechanism: additive staggered-isg continuous streams (exact plateaus)'
+      ]).concat(lines).concat([
+        '  - aggregate rate steps ' + stages.join(' -> ') + ' pps.',
         '',
         'Run:',
         '    sudo ./t-rex-64 -i --stl --cfg /etc/trex_cfg.yaml -c ' + cores,
@@ -336,7 +393,7 @@
         '    trex> start -f ' + name + '.py -p 0 -m 1 -d ' + total,
         '',
         'NOTES',
-        '  - -m scales all three streams proportionally (plateaus keep their ratio).',
+        '  - -m scales all ' + N + ' streams proportionally (plateaus keep their ratio).',
         '  - Latency streams (if you add any in the builder) ignore -m.'
       ]).join('\n') + '\n';
     }
@@ -455,9 +512,141 @@
     return { ok: true, model: model, files: files, warnings: warnings };
   }
 
+  /* ---------------- Scenario D: NDR benchmark (./ndr) ---------------- */
+
+  /* Drives the shipped ./ndr wrapper (v3.06 root), which binary-searches for
+   * the No-Drop Rate against a RUNNING interactive TRex instance. Flags
+   * verified against stl_ndr_bench_tool.py / astf_ndr_bench_tool.py in the
+   * local tree: STL needs --ports (even list) and takes -p/--pdr + -e;
+   * ASTF REQUIRES --low-mult/--high-mult search bounds.
+   *
+   * opts: { engine:'stl'|'astf', name, trexVersion,
+   *         profileMode:'generate'|'path', profilePath, rate, frameSize,
+   *         ports (stl, e.g. "0 1"), pdr, pdrError (stl),
+   *         allowedError, lowMult, highMult, latencyPps (astf),
+   *         iterTime, maxIterations, qFull, biDir (stl),
+   *         maxLatency, latTolerance, outputJson, cores, now } */
+  function buildNdr(opts) {
+    var errors = [];
+    var isStl = opts.engine !== 'astf';
+    var ports = String(opts.ports || '0 1').trim().split(/\s+/);
+    if (opts.profileMode === 'path' && !opts.profilePath) {
+      errors.push('Profile path is required when benchmarking an existing profile.');
+    }
+    if (opts.profileMode !== 'path' && !(opts.rate > 0)) { errors.push('Profile rate must be greater than 0.'); }
+    if (!(opts.iterTime > 0)) { errors.push('Iteration duration must be greater than 0.'); }
+    if (!(opts.maxIterations >= 1)) { errors.push('Max iterations must be at least 1.'); }
+    if (isStl) {
+      if (!ports.length || ports.length % 2 !== 0) { errors.push('Ports must be an even list of port ids, e.g. "0 1".'); }
+      if (!(opts.pdr >= 0 && opts.pdr <= 100)) { errors.push('PDR must be between 0 and 100 (% of drops allowed).'); }
+    } else {
+      if (!(opts.lowMult >= 1)) { errors.push('Low multiplier is required (>= 1) - the ASTF ndr tool has no default.'); }
+      if (!(opts.highMult > opts.lowMult)) { errors.push('High multiplier must be above the low multiplier.'); }
+    }
+    if (opts.latTolerance && !opts.maxLatency) {
+      errors.push('Latency tolerance needs a max latency to compare against.');
+    }
+    if (errors.length) { return { ok: false, errors: errors }; }
+
+    var name = (opts.name || 'ndr_bench').replace(/[^\w.-]+/g, '_');
+    var now = opts.now || TB.util.todayIso();
+    var cores = opts.cores || 4;
+    var model = null;
+    var files = [];
+    var warnings = [];
+    var ranges = { clientStart: '16.0.0.1', clientEnd: '16.0.0.255',
+                   serverStart: '48.0.0.1', serverEnd: '48.0.255.255' };
+
+    var profileArg;
+    if (opts.profileMode === 'path') {
+      profileArg = opts.profilePath;
+    } else {
+      profileArg = name + '.py';
+      if (isStl) {
+        model = {
+          kind: 'stl', schemaVersion: 1, trexVersion: opts.trexVersion || '3.06',
+          meta: { name: name, description: 'generated by scenario wizard', modified: '' },
+          tunables: [],
+          streams: [stlStream('S0', opts.rate, 0, ranges, opts.frameSize || 64)]
+        };
+      } else {
+        model = astfBase(name, opts.trexVersion, ranges);
+        model.mode = 'program';
+        model.templates = [httpTemplate(opts.rate, 80, null)];
+      }
+      var r = generateProfile(model, now);
+      if (!r) { return { ok: false, errors: ['No generator registered for TRex v' + model.trexVersion + '.'] }; }
+      files = r.files;
+      warnings = r.warnings;
+    }
+
+    var latPart = '';
+    if (opts.maxLatency) {
+      latPart = ' --max-latency ' + opts.maxLatency +
+        (opts.latTolerance ? ' --lat-tolerance ' + opts.latTolerance : '');
+    }
+    var outPart = opts.outputJson ? ' -o ' + name + '_results.json' : '';
+
+    var cmd;
+    if (isStl) {
+      cmd = './ndr --stl --profile ' + profileArg + ' --ports ' + ports.join(' ') +
+        ' -p ' + opts.pdr + ' -e ' + (opts.pdrError || 1) +
+        ' -t ' + opts.iterTime + ' -x ' + opts.maxIterations + ' -q ' + (opts.qFull || 2) +
+        (opts.biDir ? ' --bi-dir' : '') + latPart + outPart + ' -v';
+    } else {
+      cmd = './ndr --astf --profile ' + profileArg +
+        ' --low-mult ' + opts.lowMult + ' --high-mult ' + opts.highMult +
+        ' -e ' + (opts.allowedError || 1) +
+        ' -t ' + opts.iterTime + ' -x ' + opts.maxIterations + ' -q ' + (opts.qFull || 2) +
+        (opts.latencyPps ? ' -lpps ' + opts.latencyPps : '') + latPart + outPart + ' -v';
+    }
+
+    var runbook = [
+      'TRex NDR benchmark - find the No-Drop Rate automatically (shipped ./ndr tool)',
+      'Generated: ' + now + '   Target: TRex v' + (opts.trexVersion || '3.06'),
+      '',
+      'STEP 1 - start an interactive TRex instance (the ndr tool is a client of it):',
+      '    cd <trex dir>',
+      '    sudo ./t-rex-64 -i ' + (isStl ? '--stl' : '--astf') + ' --cfg /etc/trex_cfg.yaml -c ' + cores,
+      '',
+      'STEP 2 - run the benchmark from a second terminal in the SAME directory:',
+      (opts.profileMode !== 'path' ? '    # copy ' + name + '.py to the trex directory first' : null),
+      '    ' + cmd,
+      '',
+      'WHAT IT DOES',
+      isStl
+        ? '  - Binary-searches the transmit rate (as % of line rate) between iterations of'
+        : '  - Binary-searches the -m multiplier between ' + opts.lowMult + ' and ' + opts.highMult + ' in iterations of',
+      '    ' + opts.iterTime + ' s (max ' + opts.maxIterations + ' iterations), looking for the highest rate where',
+      isStl
+        ? '    drops stay within ' + opts.pdr + '% (PDR' + (opts.pdr === 0 ? ' = strict NDR' : '') + ', +/- ' + (opts.pdrError || 1) + '% error).'
+        : '    drops stay within ' + (opts.allowedError || 1) + '% allowed error.',
+      '  - q-full ' + (opts.qFull || 2) + '%: traffic allowed to sit in TX queues before the rate counts as',
+      '    above DUT capability.',
+      (opts.maxLatency ? '  - Latency gate: a rate also FAILS if latency exceeds ' + opts.maxLatency + ' usec' +
+        (opts.latTolerance ? ' for more than ' + opts.latTolerance + '% of probes.' : '.') : null),
+      '',
+      'READING THE RESULT',
+      '  - The tool prints the found rate per iteration and a final table;',
+      (opts.outputJson ? '    machine-readable results land in ' + name + '_results.json.' : '    add -o <file>.json for machine-readable results.'),
+      isStl
+        ? '  - Result is the NDR/PDR in % of line rate, bps and pps for the port pair' + (opts.biDir ? ' (bi-directional).' : '.')
+        : '  - Result is the highest stable -m multiplier; NDR cps = profile cps x multiplier.',
+      '',
+      'NOTES',
+      '  - Longer -t iterations give more stable results on bursty DUTs.',
+      '  - Do not run other traffic on the instance while the benchmark iterates.'
+    ].filter(function (l) { return l !== null; }).join('\n') + '\n';
+
+    if (model) { runbook += summarySection(model); }
+    files = files.concat([{ name: 'RUNBOOK.txt', language: 'shell', content: runbook }]);
+    return { ok: true, model: model, files: files, warnings: warnings };
+  }
+
   TB.scenarios = {
     buildTwoServer: buildTwoServer,
     buildRamp: buildRamp,
-    buildConnCheck: buildConnCheck
+    buildConnCheck: buildConnCheck,
+    buildNdr: buildNdr
   };
 })(typeof window !== 'undefined' ? window : globalThis);
