@@ -129,11 +129,19 @@
         '<li><strong>Hosted on the TRex box:</strong> <code>pip install flask</code> then ' +
         '<code>TREX_DIR=/opt/trex/v3.06 python app.py</code>. This unlocks the <em>Browse…</em> buttons on pcap ' +
         'fields (lists real pcaps on the box) and <em>Validate on server</em> (runs stl-sim/astf-sim and shows the result).</li></ul>' +
-        '<h4>The three output actions</h4>' +
-        '<p>Every generated artifact offers <strong>Copy</strong>, <strong>Download</strong> (the .py/.yaml file itself) and ' +
+        '<h4>The output actions</h4>' +
+        '<p>Every generated artifact offers <strong>Copy</strong>, <strong>Download</strong> (the .py/.yaml file itself), ' +
         '<strong>Download model</strong> - a JSON file that re-imports into the builder later, so you can keep editing ' +
-        'a profile long after it was made. Profiles also <strong>Save</strong> into the browser (localStorage); use ' +
+        'a profile long after it was made - and <strong>Download bundle (.zip)</strong>, which packs every generated ' +
+        'file plus the model JSON into one zip per test (profile + runbook + launch script from a scenario, for ' +
+        'example). Profiles also <strong>Save</strong> into the browser (IndexedDB, so big pcap-heavy workspaces fit); use ' +
         '<strong>Export workspace</strong> in the header for a durable backup of everything.</p>' +
+        '<h4>Undo / redo</h4>' +
+        '<p>Every profile builder\'s top bar carries <strong>↶ Undo / ↷ Redo</strong> buttons that step through ' +
+        'model snapshots - one per settled edit, up to 50 deep per builder tab. Snapshots cover everything in the ' +
+        'model (streams, tunables, topbar fields), and since loading a saved profile or hitting <em>New</em> is ' +
+        'itself an edit, undo steps back across those too. Editing after an undo discards the redo trail, like any ' +
+        'editor.</p>' +
         '<h4>What this does &amp; the file header</h4>' +
         '<p>Above every output the <em>"What this does"</em> box explains the artifact in plain English. The same ' +
         'summary is embedded as <code># Summary:</code> comments in the generated file, together with the exact ' +
@@ -327,7 +335,12 @@
         'interactive modes - the matching <code>trex-console</code> session (where -m, -d and the profile actually ' +
         'live). Downloads as a ready <code>run_&lt;name&gt;.sh</code>.</p>' +
         '<p>The two-server flags mirror the Scenarios runbooks: tick <em>server-only</em> on the receiver box\'s ' +
-        'command, set a <em>client mask</em> on the sender\'s.</p>' + fieldTable('cli');
+        'command, set a <em>client mask</em> on the sender\'s.</p>' +
+        '<p>The <strong>service mode &amp; capture</strong> section (interactive modes) appends a console block to ' +
+        'CONSOLE.txt: put ports in service mode (they answer ARP/ping), record packets into a buffer and write them ' +
+        'to a pcap (<code>capture record</code>), or watch them live (<code>capture monitor</code>), with optional ' +
+        'BPF filters like <code>udp port 53</code>. The block always ends with <code>service --off</code> - service ' +
+        'mode forwards rx traffic to software, so never measure performance with it on.</p>' + fieldTable('cli');
     } },
 
     { id: 'settings', title: 'Settings', html: function () {
@@ -335,6 +348,12 @@
         '<p>App defaults plus the <strong>server registry</strong> - one entry per TRex box. The Platform Config tab ' +
         'turns an entry into trex_cfg.yaml; the CLI Builder prefills cores and paths from it. Everything saves as you ' +
         'type; <em>Export workspace</em> (header) backs up settings and all saved profiles as one JSON file.</p>' +
+        '<p>The <strong>Text size</strong> section scales the app text on every screen: <em>All text</em> is a global ' +
+        'multiplier, and the remaining sliders fine-tune element groups (field names &amp; hints, controls, generated ' +
+        'output, manual/tooltips) on top of it. Changes apply live and persist with the workspace.</p>' +
+        '<p>Workspaces persist in the browser\'s <strong>IndexedDB</strong> (no practical size ceiling; the bottom of ' +
+        'the tab shows the active storage backend). Older localStorage workspaces migrate over automatically on first ' +
+        'load, and localStorage remains the fallback where IndexedDB is unavailable.</p>' +
         fieldTable('settings');
     } },
 
@@ -358,7 +377,8 @@
         'disk or hosted, anywhere the app itself runs.</p>' +
         '<h4>What is covered</h4>' +
         '<p>Every generator the app has: STL, ASTF, cap2, platform config, CLI, the scenario wizards and the ' +
-        'plain-English summaries, plus app plumbing (version registry, localStorage persistence, backend bridge). ' +
+        'plain-English summaries, plus app plumbing (version registry, IndexedDB/localStorage persistence, the ZIP ' +
+        'bundle writer, backend bridge). ' +
         'The test page groups them by area and documents what each test verifies, right under its PASS/FAIL row.</p>' +
         '<h4>Four kinds of test</h4>' +
         '<ul>' +
@@ -404,12 +424,13 @@
         ['New domain', 'TRex-EMU profiles', 'Client emulation profiles: ARP, DHCPv4/v6, ICMP, IGMP, IPv6 ND, DNS/mDNS - a whole additional TRex subsystem.', 'Large', 'done'],
         ['New domain', 'TPG configuration', 'Tagged Packet Group setup (tpg_tags_conf.json) for per-tag rx stats on DOT1Q/QinQ.', 'Medium', 'done'],
         ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large', 'done'],
-        ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small', 'planned'],
+        ['App platform', 'Adjustable text size', 'Settings -> Text size: a global scale plus per-group sliders (field names, controls, generated output, manual) - applied live via CSS variables, saved with the workspace.', 'Small', 'done'],
+        ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small', 'done'],
         ['App platform', 'Live TRex control', 'Extend the Flask backend to the TRex automation API: push a profile, start/stop, live stats - the app becomes a controller, not just a generator.', 'Large', 'planned'],
         ['App platform', 'Import existing .py profiles', 'Parse shipped/hand-written profiles back into editable models. Python parsing in JS is genuinely hard - realistic only for app-generated files.', 'Large', 'planned'],
-        ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small', 'planned'],
-        ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium', 'planned'],
-        ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small', 'planned']
+        ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small', 'done'],
+        ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium', 'done'],
+        ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small', 'done']
       ];
       var STATUS_LABEL = { planned: 'Planned', 'in-progress': 'In progress', done: 'Done' };
       var pending = rows.filter(function (r) { return r[4] !== 'done'; }).length;

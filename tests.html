@@ -53,6 +53,8 @@
 <div id="results"></div>
 
 <script src="js/core/util.js"></script>
+<script src="js/core/zip.js"></script>
+<script src="js/core/history.js"></script>
 <script src="js/core/store.js"></script>
 <script src="js/core/persist.js"></script>
 <script src="js/core/settings.js"></script>
@@ -1596,6 +1598,46 @@ test('cli warnings: cfg missing, server-only+mult, stl -l, bad mask, both flags'
   return { pass: !fails.length, detail: fails.join(', ') };
 });
 
+function svcModel(over) {
+  var svc = { enabled: true, ports: '', capture: 'none', rx: '0', tx: '', limit: 1000,
+    bpf: '', snaplen: null, pipe: false, outFile: '/tmp/capture.pcap' };
+  for (var k in over) { if (Object.prototype.hasOwnProperty.call(over, k)) { svc[k] = over[k]; } }
+  return svc;
+}
+
+test('cli service/capture: record, monitor and service-only console blocks', function () {
+  var fails = [];
+  var c = clgen(cliModel({ service: svcModel({ ports: '0,1', capture: 'record', rx: '0 1', tx: '0',
+    limit: 500, bpf: 'udp port 53', snaplen: 128, outFile: '/tmp/dns.pcap' }) }), NOW).files[1].content;
+  if (c.indexOf('trex> service -p 0 1') === -1) { fails.push('service-p'); }
+  if (c.indexOf('trex> capture record start --rx 0 1 --tx 0 -l 500 -f "udp port 53" -s 128') === -1) { fails.push('record-start'); }
+  if (c.indexOf('capture record stop -i 1 -o /tmp/dns.pcap') === -1) { fails.push('record-stop'); }
+  if (c.indexOf('trex> service --off -p 0 1') === -1) { fails.push('service-off'); }
+
+  c = clgen(cliModel({ mode: 'stl', service: svcModel({ capture: 'monitor', pipe: true, bpf: 'arp' }) }), NOW).files[1].content;
+  if (c.indexOf('trex> capture monitor start --rx 0 -p -f "arp"') === -1) { fails.push('monitor-pipe'); }
+  if (c.indexOf('trex> capture monitor stop') === -1) { fails.push('monitor-stop'); }
+
+  c = clgen(cliModel({ service: svcModel({}) }), NOW).files[1].content;
+  if (c.indexOf('trex> service') === -1 || c.indexOf('capture record') !== -1 ||
+      c.indexOf('capture monitor') !== -1) { fails.push('service-only'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('cli service/capture warnings: legacy skip, bad ports, missing rx/tx default', function () {
+  var fails = [];
+  var r = clgen(cliModel({ mode: 'legacy', profile: 'x.yaml', mult: 1, service: svcModel({}) }), NOW);
+  if (!r.warnings.some(function (x) { return x.indexOf('need an interactive mode') !== -1; })) { fails.push('legacy-warn'); }
+  if (r.files.length !== 1) { fails.push('legacy-no-console'); }
+  r = clgen(cliModel({ service: svcModel({ ports: '0,x' }) }), NOW);
+  if (!r.warnings.some(function (x) { return x.indexOf('not a list of port numbers') !== -1; })) { fails.push('bad-ports'); }
+  if (r.files[1].content.indexOf('trex> service -p') !== -1) { fails.push('bad-ports-fallback'); }
+  r = clgen(cliModel({ service: svcModel({ capture: 'record', rx: '', tx: '' }) }), NOW);
+  if (!r.warnings.some(function (x) { return x.indexOf('defaulting to --rx 0') !== -1; })) { fails.push('no-ports-warn'); }
+  if (r.files[1].content.indexOf('capture record start --rx 0 -l 1000') === -1) { fails.push('no-ports-default'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
 test('cfg warnings: thread collision, core excess, mixed modes, iface count, cross-wiring', function () {
   var fails = [];
   var s = srvMac(); s.platform.latencyThreadId = 3;
@@ -2008,11 +2050,150 @@ test('BIRD round-trip: model -> JSON -> parse -> regenerate identical', function
   return { pass: ok, detail: ok ? '' : 'regeneration differed after JSON round-trip' };
 });
 
+test('settings: text-size display defaults and CSS variable apply', function () {
+  var fails = [];
+  var d = TB.settings.defaults();
+  var keys = ['fontScale', 'labelScale', 'controlScale', 'codeScale', 'manualScale'];
+  keys.forEach(function (k) {
+    if (!d.display || d.display[k] !== 100) { fails.push('default ' + k); }
+  });
+  var st = document.documentElement.style;
+  TB.settings.applyDisplay({ display: { fontScale: 125, labelScale: 80, controlScale: 100, codeScale: 145, manualScale: 999 } });
+  if (st.getPropertyValue('--font-scale') !== '1.25') { fails.push('font-scale(' + st.getPropertyValue('--font-scale') + ')'); }
+  if (st.getPropertyValue('--scale-labels') !== '0.8') { fails.push('scale-labels(' + st.getPropertyValue('--scale-labels') + ')'); }
+  if (st.getPropertyValue('--scale-code') !== '1.45') { fails.push('scale-code(' + st.getPropertyValue('--scale-code') + ')'); }
+  if (st.getPropertyValue('--scale-manual') !== '1') { fails.push('clamp(' + st.getPropertyValue('--scale-manual') + ')'); }
+  TB.settings.applyDisplay(d);
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('persist: IndexedDB backing store, write-through cache round-trip', function () {
+  return TB.persist.ready.then(function () {
+    if (TB.persist.backendName() !== 'indexeddb') {
+      return { pass: true, detail: 'IndexedDB unavailable in this environment - running on the ' +
+        TB.persist.backendName() + ' fallback (also a supported path)' };
+    }
+    var key = 'trexb.selftest.v1';
+    var val = { n: 42, s: 'µ-probe' };
+    var r = TB.persist.set(key, val);
+    if (!r.ok) { return { pass: false, detail: 'set failed: ' + r.error }; }
+    var back = TB.persist.get(key, null);
+
+    /* read the raw value back through a separate IndexedDB connection - proves
+     * the async write-through actually reached disk, not just the cache */
+    return new Promise(function (resolve, reject) {
+      var rq = indexedDB.open('trexb', 1);
+      rq.onerror = reject;
+      rq.onsuccess = function (e) {
+        var db = e.target.result;
+        var g = db.transaction('kv', 'readonly').objectStore('kv').get(key);
+        g.onerror = reject;
+        g.onsuccess = function () { db.close(); resolve(g.result); };
+      };
+    }).then(function (raw) {
+      TB.persist.remove(key);
+      var fails = [];
+      if (!back || back.n !== 42 || back.s !== 'µ-probe') { fails.push('cache-read'); }
+      if (raw !== JSON.stringify(val)) { fails.push('idb-raw(' + TB.util.escapeHtml(String(raw)) + ')'); }
+      return { pass: !fails.length, detail: fails.join(', ') };
+    });
+  });
+});
+
+test('history: record/dedupe, undo/redo walk, branch truncation, depth limit', function () {
+  var fails = [];
+  var h = TB.history.create({ limit: 5 });
+  if (h.canUndo() || h.canRedo()) { fails.push('empty-state'); }
+  h.record({ v: 1 });
+  if (!h.record({ v: 2 })) { fails.push('push-2'); }
+  if (h.record({ v: 2 })) { fails.push('dedupe'); }               // identical -> no entry
+  h.record({ v: 3 });
+  var m = h.undo();
+  if (!m || m.v !== 2 || !h.canRedo()) { fails.push('undo(' + JSON.stringify(m) + ')'); }
+  m = h.undo();
+  if (!m || m.v !== 1 || h.canUndo()) { fails.push('undo-to-root'); }
+  if (h.undo() !== null) { fails.push('undo-past-root'); }
+  m = h.redo();
+  if (!m || m.v !== 2) { fails.push('redo'); }
+  h.record({ v: 9 });                                             // edit after undo
+  if (h.canRedo() || h.depth() !== 3) { fails.push('branch-truncate(depth=' + h.depth() + ')'); }
+  for (var i = 0; i < 20; i++) { h.record({ v: 100 + i }); }
+  if (h.depth() !== 5) { fails.push('limit(depth=' + h.depth() + ')'); }
+  m = h.undo();
+  var mutated = h.undo();
+  mutated.v = 'corrupted';
+  if (h.redo().v === 'corrupted') { fails.push('clone-isolation'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('zip: crc32 check vectors and store-format byte layout', function () {
+  var fails = [];
+  function crcStr(s) { return TB.zip.crc32(TB.zip.utf8(s)); }
+  if (crcStr('') !== 0) { fails.push('crc-empty'); }
+  if (crcStr('123456789') !== 0xCBF43926) { fails.push('crc-check-value(' + crcStr('123456789').toString(16) + ')'); }
+  if (crcStr('hello') !== 0x3610A686) { fails.push('crc-hello'); }
+
+  var z = TB.zip.build([
+    { name: 'a.py', content: 'print(1)\n' },
+    { name: 'dir/b.yaml', content: '- x\n' }
+  ], { date: new Date(2026, 0, 2, 3, 4, 6) });
+  function u16(o) { return z[o] | (z[o + 1] << 8); }
+  function u32(o) { return (z[o] | (z[o + 1] << 8) | (z[o + 2] << 16) | (z[o + 3] << 24)) >>> 0; }
+  if (u32(0) !== 0x04034B50) { fails.push('local-sig'); }
+  var eocd = z.length - 22;
+  if (u32(eocd) !== 0x06054B50) { fails.push('eocd-sig'); }
+  if (u16(eocd + 10) !== 2) { fails.push('eocd-count(' + u16(eocd + 10) + ')'); }
+  var cdStart = u32(eocd + 16);
+  if (u32(cdStart) !== 0x02014B50) { fails.push('central-sig'); }
+  if (u32(cdStart + 16) !== crcStr('print(1)\n')) { fails.push('central-crc'); }
+  if (u32(eocd + 12) !== eocd - cdStart) { fails.push('cd-size'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('zip: entries extract back to the original contents (incl. UTF-8)', function () {
+  var files = [
+    { name: 'run_test.sh', content: '#!/bin/bash\necho ok\n' },
+    { name: 'notes.txt', content: 'latency 5 µs — café\n' }
+  ];
+  var z = TB.zip.build(files, { date: new Date(2026, 0, 2) });
+  function u16(o) { return z[o] | (z[o + 1] << 8); }
+  function u32(o) { return (z[o] | (z[o + 1] << 8) | (z[o + 2] << 16) | (z[o + 3] << 24)) >>> 0; }
+  var eocd = z.length - 22, n = u16(eocd + 10), p = u32(eocd + 16), fails = [];
+  if (n !== files.length) { fails.push('count'); }
+  for (var i = 0; i < n; i++) {
+    if (u32(p) !== 0x02014B50) { fails.push('sig' + i); break; }
+    var nameLen = u16(p + 28), size = u32(p + 24), off = u32(p + 42);
+    var lhNameLen = u16(off + 26), lhExtra = u16(off + 28);
+    var dataStart = off + 30 + lhNameLen + lhExtra;
+    var got = new TextDecoder().decode(z.slice(dataStart, dataStart + size));
+    var name = new TextDecoder().decode(z.slice(p + 46, p + 46 + nameLen));
+    if (name !== files[i].name) { fails.push('name' + i + '(' + name + ')'); }
+    if (got !== files[i].content) { fails.push('content' + i); }
+    if (u32(p + 16) !== TB.zip.crc32(TB.zip.utf8(files[i].content))) { fails.push('crc' + i); }
+    p += 46 + nameLen;
+  }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
 /* ---------------- test documentation ----------------
  * One entry per registered test, keyed by its exact name. Rendered under the
  * result row. The meta-test at the bottom fails if a test is missing here,
  * so new tests cannot land undocumented. */
 var TEST_DOCS = {
+  'history: record/dedupe, undo/redo walk, branch truncation, depth limit':
+    'The undo/redo engine behind every builder\'s topbar: recording an unchanged model must not create an entry (each settled edit lands exactly once), undo/redo must walk the stack and stop cleanly at both ends, editing after an undo must discard the redo branch (standard editor semantics), the stack must cap at its limit by dropping the oldest snapshots, and returned models must be independent clones - mutating one must not corrupt the history.',
+  'persist: IndexedDB backing store, write-through cache round-trip':
+    'The IndexedDB workspace store (removes the ~5 MB localStorage ceiling): after TB.persist.ready the app must be on the indexeddb backend, a set() must be readable back synchronously from the cache AND - via a second, independent IndexedDB connection - from disk, proving the async write-through completes. Cleans its scratch key up afterwards. In environments without IndexedDB the test passes on the documented localStorage fallback path.',
+  'zip: crc32 check vectors and store-format byte layout':
+    'The bundle-export ZIP writer: CRC-32 must match the standard check vectors (empty=0, "123456789"=0xCBF43926), and a two-file archive must carry the right signatures in the right places - local header at byte 0, central directory where the end-of-central-directory record points, correct entry count, per-entry CRC and central-directory size. Any archiver rejects the zip if one of these is off.',
+  'zip: entries extract back to the original contents (incl. UTF-8)':
+    'Walks the built archive the way an unzipper does - EOCD, central directory, local headers - and extracts every entry, requiring byte-identical round-trip of the contents including non-ASCII characters (µ, é) to prove the UTF-8 encoding path.',
+  'cli service/capture: record, monitor and service-only console blocks':
+    'The service mode & capture helper (CLI builder): a record model must emit the full v3.06 console sequence (service -p, capture record start with --rx/--tx/-l/-f/-s, capture record stop -i/-o, service --off), a monitor model the monitor start/stop pair with -p pipe mode, and capture:none just the service on/off bracket with no capture lines. Flag names verified against v3.06 automation/trex_control_plane trex_capture.py and parsing_opts.py.',
+  'cli service/capture warnings: legacy skip, bad ports, missing rx/tx default':
+    'Guard rails for the helper: legacy STF mode has no console so the block must be skipped with a warning; a non-numeric port list falls back to all acquired ports (no -p emitted); record with neither --rx nor --tx warns and defaults to --rx 0 so the emitted commands always parse.',
+  'settings: text-size display defaults and CSS variable apply':
+    'The adjustable text size (Settings -> Text size): defaults must ship all five scales at 100%, applyDisplay must translate percentages into the CSS variables the stylesheet multiplies into every font-size, and out-of-range values (here 999%) must clamp back to 1 so a corrupted workspace import cannot render the app unreadable.',
   'golden: minimal cont UDP with size tunable (udp_1pkt_simple-like)':
     'The baseline STL profile: one continuous UDP stream whose frame size is bound to a --size tunable. Verifies the whole file end to end - header comments, summary block, argparse plumbing, STLPktBuilder padding and STLTXCont - against the shipped udp_1pkt_simple.py pattern.',
   'golden: 3-stream IMIX with VM vars (imix-like)':
@@ -2054,7 +2235,7 @@ var TEST_DOCS = {
   'version registry: 3.06 resolves, unknown version does not':
     'The per-TRex-version generator registry: v3.06 resolves to functions, an unknown version returns null instead of crashing - the mechanism future TRex versions plug into.',
   'persist: save/load/delete profile round-trip':
-    'localStorage persistence: save a profile, read it back identical, delete it, confirm it is gone.',
+    'Workspace persistence (IndexedDB or its localStorage fallback): save a profile, read it back identical, delete it, confirm it is gone.',
   'ASTF golden: pcap mode (http_simple-like)':
     'The baseline ASTF profile: one replayed pcap with ip generator pools, matching the shipped astf/http_simple.py. Full-file golden.',
   'ASTF golden: rampup_sec (param_sch_rampup-like)':
@@ -2183,7 +2364,7 @@ var TEST_SECTIONS = {
     blurb: 'Deliberately broken models must produce the right warning; valid models must survive a JSON save/load round-trip byte-identically.' },
   'backend bridge: unavailable by default (file:// / no server), API surface present': {
     title: 'App plumbing',
-    blurb: 'The version registry, localStorage persistence and the optional Flask backend bridge.' },
+    blurb: 'The version registry, IndexedDB/localStorage persistence, the bundle-export ZIP writer and the optional Flask backend bridge.' },
   'ASTF golden: pcap mode (http_simple-like)': {
     title: 'ASTF generator',
     blurb: 'Goldens and structural checks for stateful profiles: pcap replay lists, scripted client/server programs, loops, UDP messages and the warning paths.' },
@@ -2209,14 +2390,14 @@ test('docs: every registered test has a write-up on this page', function () {
   return { pass: !missing.length, detail: missing.length ? 'undocumented: ' + TB.util.escapeHtml(missing.join(' | ')) : '' };
 });
 
-/* ---------------- run ---------------- */
+/* ---------------- run ----------------
+ * Test fns may return { pass, detail } directly or a Promise of it (used by
+ * the IndexedDB persistence test); results render in registration order. */
 var results = document.getElementById('results');
 var passCount = 0;
 var t0 = performance.now();
-tests.forEach(function (t) {
-  var out;
-  try { out = t.fn(); }
-  catch (e) { out = { pass: false, detail: 'threw: ' + TB.util.escapeHtml(e.message) }; }
+
+function renderResult(t, out) {
   var sec = TEST_SECTIONS[t.name];
   if (sec) {
     var head = document.createElement('div');
@@ -2235,12 +2416,24 @@ tests.forEach(function (t) {
     (out.pass || !out.detail ? '' : '<pre class="diff">' + out.detail + '</pre>');
   results.appendChild(div);
   if (out.pass) { passCount++; }
+}
+
+var runChain = Promise.resolve();
+tests.forEach(function (t) {
+  runChain = runChain.then(function () {
+    return Promise.resolve().then(function () { return t.fn(); }).then(
+      function (out) { renderResult(t, out); },
+      function (e) { renderResult(t, { pass: false, detail: 'threw: ' + TB.util.escapeHtml(e.message) }); }
+    );
+  });
 });
-var elapsed = Math.round(performance.now() - t0);
-document.getElementById('summary').textContent = passCount + ' / ' + tests.length + ' tests passed';
-document.getElementById('summary').style.color = passCount === tests.length ? '#3fb950' : '#f85149';
-document.getElementById('run-meta').textContent = 'This run: ' + new Date().toLocaleString() +
-  ' · ' + elapsed + ' ms · executed in this browser on page load';
+runChain.then(function () {
+  var elapsed = Math.round(performance.now() - t0);
+  document.getElementById('summary').textContent = passCount + ' / ' + tests.length + ' tests passed';
+  document.getElementById('summary').style.color = passCount === tests.length ? '#3fb950' : '#f85149';
+  document.getElementById('run-meta').textContent = 'This run: ' + new Date().toLocaleString() +
+    ' · ' + elapsed + ' ms · executed in this browser on page load';
+});
 </script>
 </body>
 </html>

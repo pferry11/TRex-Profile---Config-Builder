@@ -210,6 +210,13 @@
       var model = defaultModel();
       var selectedIdx = 0; // index into capList or templates depending on mode
       var regenTimer = null;
+      var history = TB.history.create();
+      var histCtl = TB.ui.historyControls(history, function (m) {
+        model = m;
+        var n = model.mode === 'pcap' ? model.capList.length : model.templates.length;
+        if (selectedIdx >= n) { selectedIdx = Math.max(0, n - 1); }
+        renderAll();
+      });
 
       TB.ui.ensurePcapDatalist();
 
@@ -303,6 +310,7 @@
       function regen() {
         if (regenTimer) { clearTimeout(regenTimer); }
         regenTimer = setTimeout(function () {
+          history.record(model);
           var gen = TB.gen.resolve(model.trexVersion, 'astf');
           if (!gen) {
             outputPane.innerHTML = '';
@@ -337,6 +345,7 @@
           } }));
 
         var actions = el('div', { class: 'topbar-actions' });
+        actions.appendChild(histCtl);
         actions.appendChild(el('button', { class: 'btn', text: 'New',
           onclick: function () {
             if (!confirm('Start a new profile? Unsaved changes are lost.')) { return; }

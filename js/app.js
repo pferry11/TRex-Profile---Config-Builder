@@ -4,7 +4,7 @@
   var TB = root.TB = root.TB || {};
 
   /* App version - bump the minor number with each feature release (commit batch). */
-  TB.APP_VERSION = '0.19.0';
+  TB.APP_VERSION = '0.20.0';
 
   var TABS = [
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },
@@ -32,6 +32,7 @@
   function boot() {
     var el = TB.ui.el;
     var app = document.getElementById('app');
+    TB.settings.applyDisplay(TB.settings.get());
     var uiState = TB.persist.get(TB.persist.KEYS.ui, { activeTab: 'stl' });
 
     /* header */
@@ -141,9 +142,10 @@
   }
 
   /* wait for the backend probe (fast: immediate on file://, <=2 s on http)
-   * so backend-dependent buttons render correctly on first paint */
+   * so backend-dependent buttons render correctly on first paint, and for
+   * the persistence layer (IndexedDB cache load) so reads see saved data */
   function start() {
-    TB.backend.ready.then(boot);
+    Promise.all([TB.backend.ready, TB.persist.ready]).then(boot);
   }
 
   if (document.readyState === 'loading') {

@@ -18,9 +18,26 @@
       cores: 4, mult: 1, durationSec: 60,
       latencyPps: null, flowPortAffinity: false,
       astfServerOnly: false, astfClientMask: null,
-      profile: '', extraArgs: '', trexDir: '/opt/trex/v3.06'
+      profile: '', extraArgs: '', trexDir: '/opt/trex/v3.06',
+      service: {
+        enabled: false, ports: '', capture: 'none',
+        rx: '0', tx: '', limit: 1000, bpf: '', snaplen: null,
+        pipe: false, outFile: '/tmp/capture.pcap'
+      }
     };
   }
+
+  /* Common BPF filters offered next to the free-text filter field. */
+  var BPF_PRESETS = [
+    { value: '', label: '(no filter)' },
+    { value: 'arp', label: 'arp' },
+    { value: 'icmp', label: 'icmp' },
+    { value: 'udp port 53', label: 'udp port 53 (DNS)' },
+    { value: 'tcp port 80', label: 'tcp port 80 (HTTP)' },
+    { value: 'tcp port 443', label: 'tcp port 443 (HTTPS)' },
+    { value: 'vlan', label: 'vlan (tagged)' },
+    { value: 'host 48.0.0.1', label: 'host 48.0.0.1' }
+  ];
 
   function render() {
     var el = TB.ui.el;
@@ -130,6 +147,54 @@
       r4.appendChild(el('span', { class: 'field-hint',
         text: 'two-server split: receiver = server-only, sender = client mask (see Scenarios tab)' }));
       wrap.appendChild(r4);
+    }
+
+    /* ---- service mode & capture (console commands - interactive only) ---- */
+    if (m.mode !== 'legacy') {
+      var svc = m.service;
+      var svcRow = el('div', { class: 'field-row' });
+      svcRow.appendChild(field({ label: 'Service mode & capture block (CONSOLE.txt)', tip: TB.help.cli.service, type: 'checkbox',
+        value: svc.enabled,
+        onChange: function (v) { svc.enabled = v; render(); } }));
+      if (svc.enabled) {
+        svcRow.appendChild(field({ label: 'service ports (blank = all)', tip: TB.help.cli.servicePorts, type: 'text',
+          value: svc.ports, width: '90px', placeholder: '0 1',
+          onChange: function (v) { svc.ports = v || ''; regen(); } }));
+        svcRow.appendChild(field({ label: 'capture', tip: TB.help.cli.capture, type: 'select', value: svc.capture,
+          options: [
+            { value: 'none', label: 'none (service mode only)' },
+            { value: 'record', label: 'record (buffer -> pcap)' },
+            { value: 'monitor', label: 'monitor (live)' }
+          ],
+          onChange: function (v) { svc.capture = v; render(); } }));
+      }
+      wrap.appendChild(svcRow);
+      if (svc.enabled && svc.capture !== 'none') {
+        var capRow = el('div', { class: 'field-row' });
+        capRow.appendChild(field({ label: '--rx ports', tip: TB.help.cli.capturePorts, type: 'text', value: svc.rx, width: '80px',
+          placeholder: '0',
+          onChange: function (v) { svc.rx = v || ''; regen(); } }));
+        capRow.appendChild(field({ label: '--tx ports', tip: TB.help.cli.capturePorts, type: 'text', value: svc.tx, width: '80px',
+          onChange: function (v) { svc.tx = v || ''; regen(); } }));
+        capRow.appendChild(field({ label: 'BPF preset', tip: TB.help.cli.bpf, type: 'select', value: '',
+          options: BPF_PRESETS,
+          onChange: function (v) { svc.bpf = v; render(); } }));
+        capRow.appendChild(field({ label: 'BPF filter (-f)', tip: TB.help.cli.bpf, type: 'text', value: svc.bpf, width: '170px',
+          placeholder: 'udp port 53',
+          onChange: function (v) { svc.bpf = v || ''; regen(); } }));
+        capRow.appendChild(field({ label: 'snaplen (-s)', tip: TB.help.cli.snaplen, type: 'int', value: svc.snaplen, width: '70px',
+          onChange: function (v) { svc.snaplen = v; regen(); } }));
+        if (svc.capture === 'record') {
+          capRow.appendChild(field({ label: 'packet limit (-l)', tip: TB.help.cli.captureLimit, type: 'int', value: svc.limit, width: '80px',
+            onChange: function (v) { svc.limit = v; regen(); } }));
+          capRow.appendChild(field({ label: 'output pcap (-o)', tip: TB.help.cli.captureOut, type: 'text', value: svc.outFile, width: '160px',
+            onChange: function (v) { svc.outFile = v || ''; regen(); } }));
+        } else {
+          capRow.appendChild(field({ label: 'pipe to wireshark (-p)', tip: TB.help.cli.monitorPipe, type: 'checkbox', value: svc.pipe,
+            onChange: function (v) { svc.pipe = v; regen(); } }));
+        }
+        wrap.appendChild(capRow);
+      }
     }
 
     /* ---- extra args ---- */

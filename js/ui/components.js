@@ -98,6 +98,26 @@
     return wrap;
   };
 
+  /* Undo/redo buttons bound to a TB.history instance. Create ONCE per builder
+   * mount and re-append on topbar re-renders (appendChild moves the node), so
+   * the single onChange subscription stays valid. restore(model) receives a
+   * fresh clone to swap in and re-render. */
+  TB.ui.historyControls = function (hist, restore) {
+    var el = TB.ui.el;
+    function apply(m) { if (m) { restore(m); } }
+    var undoBtn = el('button', { class: 'btn btn-small btn-secondary', text: '↶ Undo',
+      title: 'Undo the last edit', onclick: function () { apply(hist.undo()); } });
+    var redoBtn = el('button', { class: 'btn btn-small btn-secondary', text: '↷ Redo',
+      title: 'Redo', onclick: function () { apply(hist.redo()); } });
+    function update() {
+      undoBtn.disabled = !hist.canUndo();
+      redoBtn.disabled = !hist.canRedo();
+    }
+    hist.onChange(update);
+    update();
+    return el('span', { class: 'history-controls' }, [undoBtn, redoBtn]);
+  };
+
   TB.ui.section = function (title, body, open, tip) {
     var el = TB.ui.el;
     var caret = el('span', { class: 'caret', text: open === false ? '▸' : '▾' });

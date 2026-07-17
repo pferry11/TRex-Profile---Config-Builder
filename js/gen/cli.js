@@ -15,6 +15,64 @@
 
   function set(v) { return v !== null && v !== undefined && v !== ''; }
 
+  /* "0, 1" / "0 1" -> "0 1"; returns null when empty or not all ints */
+  function portList(raw) {
+    if (!set(raw)) { return null; }
+    var parts = String(raw).trim().split(/[\s,]+/);
+    for (var i = 0; i < parts.length; i++) {
+      if (!/^\d+$/.test(parts[i])) { return null; }
+    }
+    return parts.join(' ');
+  }
+
+  /* Console lines for the service-mode + capture helper (interactive only).
+   * v3.06 console syntax (trex_capture.py / service_line):
+   *   service [-p PORTS] [--off]
+   *   capture record start --rx P.. --tx P.. -l N -f BPF -s SNAP
+   *   capture record stop -i ID -o FILE  |  capture monitor start/stop  */
+  function serviceBlock(svc, warnings) {
+    var lines = [];
+    lines.push('# --- service mode & capture ' + new Array(47).join('-'));
+    lines.push('# Service mode makes ports answer ARP/ICMP and enables rx capture.');
+    lines.push('# NOTE: service mode filters/forwards rx traffic to software - do not');
+    lines.push('# measure performance while it is on.');
+    var ports = portList(svc.ports);
+    if (set(svc.ports) && ports === null) {
+      warnings.push('Service ports "' + svc.ports + '" is not a list of port numbers; using all acquired ports.');
+    }
+    lines.push('trex> service' + (ports ? ' -p ' + ports : '') + (ports ? '' : '          # all acquired ports'));
+
+    var rx = portList(svc.rx);
+    var tx = portList(svc.tx);
+    var bpf = set(svc.bpf) ? ' -f "' + svc.bpf + '"' : '';
+    var snap = set(svc.snaplen) ? ' -s ' + svc.snaplen : '';
+
+    if (svc.capture === 'record') {
+      if (!rx && !tx) {
+        warnings.push('Capture record has no --rx or --tx ports; defaulting to --rx 0.');
+        rx = '0';
+      }
+      var limit = set(svc.limit) ? svc.limit : 1000;
+      lines.push('trex> capture record start' + (rx ? ' --rx ' + rx : '') + (tx ? ' --tx ' + tx : '') +
+        ' -l ' + limit + bpf + snap);
+      lines.push('trex> capture show                    # note the capture id');
+      lines.push('# ... run traffic, then write the buffer to a pcap:');
+      lines.push('trex> capture record stop -i 1 -o ' + (set(svc.outFile) ? svc.outFile : '/tmp/capture.pcap'));
+    } else if (svc.capture === 'monitor') {
+      if (!rx && !tx) {
+        warnings.push('Capture monitor has no --rx or --tx ports; defaulting to --rx 0.');
+        rx = '0';
+      }
+      lines.push('trex> capture monitor start' + (rx ? ' --rx ' + rx : '') + (tx ? ' --tx ' + tx : '') +
+        (svc.pipe ? ' -p' : ' -v') + bpf + snap +
+        (svc.pipe ? '    # pipe to wireshark' : '    # print to screen'));
+      lines.push('trex> capture monitor stop');
+    }
+    lines.push('trex> capture clear                   # drop any leftover captures');
+    lines.push('trex> service --off' + (ports ? ' -p ' + ports : '') + '                   # back to full-speed forwarding');
+    return lines;
+  }
+
   function generate(model, opts) {
     opts = opts || {};
     var warnings = [];
@@ -46,6 +104,11 @@
     if (!profile) {
       warnings.push('No profile selected; using a <profile> placeholder.');
       profile = mode === 'legacy' ? '<profile.yaml>' : '<profile.py>';
+    }
+    var svc = model.service;
+    if (svc && svc.enabled && !interactive) {
+      warnings.push('Service mode & capture are trex-console commands; they need an interactive mode ' +
+        '(legacy STF has no console). Block skipped.');
     }
 
     /* ---- t-rex-64 line (canonical flag order) ---- */
@@ -114,6 +177,10 @@
         consoleLines.push('trex> ' + start.join(' '));
         consoleLines.push('trex> tui        # live stats dashboard');
         consoleLines.push('trex> stop       # stop traffic');
+      }
+      if (svc && svc.enabled) {
+        consoleLines.push('');
+        consoleLines = consoleLines.concat(serviceBlock(svc, warnings));
       }
       consoleLines.push('');
       files.push({ name: 'CONSOLE.txt', language: 'shell', content: consoleLines.join('\n') });

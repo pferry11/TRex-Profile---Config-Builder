@@ -34,6 +34,12 @@
 
       var model = defaultModel();
       var selectedIdx = 0;
+      var history = TB.history.create();
+      var histCtl = TB.ui.historyControls(history, function (m) {
+        model = m;
+        if (selectedIdx >= model.capInfo.length) { selectedIdx = Math.max(0, model.capInfo.length - 1); }
+        renderAll();
+      });
       var regenTimer = null;
 
       TB.ui.ensureCap2Datalist();
@@ -48,6 +54,7 @@
       function regen() {
         if (regenTimer) { clearTimeout(regenTimer); }
         regenTimer = setTimeout(function () {
+          history.record(model);
           var gen = TB.gen.resolve(model.trexVersion, 'cap2');
           if (!gen) {
             outputPane.innerHTML = '';
@@ -71,6 +78,7 @@
           onChange: function (v) { model.trexVersion = v; regen(); } }));
 
         var actions = el('div', { class: 'topbar-actions' });
+        actions.appendChild(histCtl);
         actions.appendChild(el('button', { class: 'btn', text: 'New',
           onclick: function () {
             if (!confirm('Start a new profile? Unsaved changes are lost.')) { return; }

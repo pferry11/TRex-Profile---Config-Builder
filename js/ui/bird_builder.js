@@ -28,6 +28,8 @@
       var el = TB.ui.el;
       var field = TB.ui.field;
       var model = defaultModel();
+      var history = TB.history.create();
+      var histCtl = TB.ui.historyControls(history, function (m) { model = m; renderAll(); });
       var regenTimer = null;
 
       var topbar = el('div', { class: 'builder-topbar' });
@@ -42,6 +44,7 @@
       function regen() {
         if (regenTimer) { clearTimeout(regenTimer); }
         regenTimer = setTimeout(function () {
+          history.record(model);
           var gen = TB.gen.resolve(model.trexVersion, 'bird');
           if (!gen) {
             out.innerHTML = '';
@@ -63,6 +66,7 @@
           onChange: function (v) { model.trexVersion = v; regen(); } }));
 
         var actions = el('div', { class: 'topbar-actions' });
+        actions.appendChild(histCtl);
         actions.appendChild(el('button', { class: 'btn', text: 'New',
           onclick: function () {
             if (!confirm('Start a new BIRD config? Unsaved changes are lost.')) { return; }

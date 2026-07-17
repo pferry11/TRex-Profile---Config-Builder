@@ -221,12 +221,22 @@
       flowAffinity: '-p: send all of a flow’s packets from one port (legacy mode).',
       serverOnly: 'This box only answers connections (the receiver in a two-box setup). Generates no load.',
       clientMask: 'Hex bitmask of local ports that act as the traffic client, e.g. 0x1 = port 0 only.',
-      extraArgs: 'Appended to the command verbatim - for flags the form does not cover.'
+      extraArgs: 'Appended to the command verbatim - for flags the form does not cover.',
+      service: 'Adds a service-mode block to CONSOLE.txt: ports answer ARP/ping and can capture packets. Service mode forwards rx traffic to software - never leave it on while measuring performance.',
+      servicePorts: 'Ports to put in service mode (service -p 0 1). Blank applies to all acquired ports.',
+      capture: 'record buffers packets on the server and writes a pcap on stop; monitor prints packets live to the console (or pipes them to Wireshark).',
+      capturePorts: 'Capture direction: --rx grabs packets received on those ports, --tx packets sent. Either or both.',
+      bpf: 'Berkeley Packet Filter expression (-f), e.g. "udp port 53" or "host 16.0.0.1 and tcp". The preset dropdown fills the field; edit freely after.',
+      snaplen: 'Truncate captured packets to this many bytes (-s) - smaller buffers, more packets.',
+      captureLimit: 'How many packets the capture buffer holds (-l); older packets are dropped once full.',
+      captureOut: 'Path the pcap is written to on "capture record stop" (-o), on the machine running trex-console.',
+      monitorPipe: 'Instead of printing to the console, forward packets to a pipe you can open in Wireshark.'
     },
 
     settings: {
       _tab: 'App defaults plus the server registry: one entry per TRex box (PCI NICs, cores, port identities). The Platform Config and CLI tabs read from here.',
       _sections: {},
+      textSize: 'Scales the app text on every screen. "All text" multiplies everything at once; the other sliders fine-tune element groups on top of it (field names are the smallest text - bump that one first). Changes apply live and are saved with the workspace.',
       trexVersion: 'Default target version for new profiles and configs.',
       pcapDir: 'Where pcaps live on the box - used as a hint next to pcap path fields.',
       activeServer: 'Server preselected in the Platform Config tab.',

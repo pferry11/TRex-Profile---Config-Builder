@@ -1,7 +1,7 @@
 /* TRex Profile & Config Builder - Settings tab: app defaults + the server
  * registry (PCI interfaces, cores, port MACs/IPs, NUMA platform, memory).
- * Changes save to localStorage immediately; the Platform Config tab and the
- * CLI builder read from this registry. */
+ * Changes save to browser storage immediately (IndexedDB, localStorage as the
+ * fallback); the Platform Config tab and the CLI builder read from this registry. */
 (function (root) {
   'use strict';
   var TB = root.TB = root.TB || {};
@@ -48,6 +48,9 @@
       function render() {
         wrap.innerHTML = '';
 
+        /* ---- text size ---- */
+        wrap.appendChild(TB.ui.section('Text size', textSizeEditor(), true, TB.help.settings.textSize));
+
         /* ---- defaults ---- */
         var defBody = el('div', { class: 'field-row' });
         defBody.appendChild(field({ label: 'Default TRex version', tip: TB.help.settings.trexVersion, type: 'select',
@@ -74,6 +77,49 @@
             settings.servers.push(defaultServer(settings.servers.length + 1));
             save(); render();
           } }));
+
+        /* ---- storage backend readout ---- */
+        var STORE_LABEL = {
+          indexeddb: 'IndexedDB (no practical size limit)',
+          localstorage: 'browser localStorage (~5 MB cap - IndexedDB unavailable here)',
+          memory: 'in-memory only - nothing persists! Export your workspace to keep work.'
+        };
+        wrap.appendChild(el('div', { class: 'field-hint',
+          text: 'Workspace storage: ' + STORE_LABEL[TB.persist.backendName()] }));
+      }
+
+      function textSizeEditor() {
+        var box = el('div', {});
+        var SCALES = [
+          { key: 'fontScale', label: 'All text', hint: 'scales every screen at once' },
+          { key: 'labelScale', label: 'Field names & hints', hint: 'the small labels above inputs' },
+          { key: 'controlScale', label: 'Inputs, buttons & tabs', hint: 'interactive controls' },
+          { key: 'codeScale', label: 'Generated output', hint: 'code blocks in the output panes' },
+          { key: 'manualScale', label: 'Manual & tooltips', hint: 'help prose and hover tips' }
+        ];
+
+        SCALES.forEach(function (def) {
+          var readout = el('span', { class: 'textsize-val', text: settings.display[def.key] + '%' });
+          var slider = el('input', { type: 'range', min: 80, max: 160, step: 5,
+            value: settings.display[def.key], title: def.hint });
+          slider.addEventListener('input', function () {
+            settings.display[def.key] = parseInt(slider.value, 10);
+            readout.textContent = slider.value + '%';
+            TB.settings.applyDisplay(settings);
+          });
+          slider.addEventListener('change', save);
+          box.appendChild(el('div', { class: 'textsize-row' }, [
+            el('span', { class: 'field-label', text: def.label }), slider, readout
+          ]));
+        });
+
+        box.appendChild(el('button', { class: 'btn btn-small', text: 'Reset to 100%',
+          onclick: function () {
+            settings.display = TB.settings.defaults().display;
+            TB.settings.applyDisplay(settings);
+            save(); render();
+          } }));
+        return box;
       }
 
       function serverEditor(srv, idx) {

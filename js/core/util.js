@@ -56,7 +56,14 @@
     },
 
     downloadText: function (filename, text) {
-      var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      TB.util.downloadBlob(filename, new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    },
+
+    downloadBinary: function (filename, bytes, mime) {
+      TB.util.downloadBlob(filename, new Blob([bytes], { type: mime || 'application/octet-stream' }));
+    },
+
+    downloadBlob: function (filename, blob) {
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;

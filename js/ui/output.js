@@ -81,6 +81,21 @@
             onclick: function () { TB.util.downloadText(modelFileName(), JSON.stringify(model, null, 2)); }
           }));
         }
+        if (TB.zip && (result.files.length > 1 || model)) {
+          var bundleBase = ((model && model.meta && model.meta.name) ? model.meta.name : 'trexb')
+            .replace(/[^\w.-]+/g, '_');
+          actionsEl.appendChild(el('button', {
+            class: 'btn btn-secondary',
+            text: 'Download bundle (.zip)',
+            title: 'all generated files' + (model ? ' + the model JSON' : '') + ' in one zip',
+            onclick: function () {
+              var items = result.files.map(function (x) { return { name: x.name, content: x.content }; });
+              if (model) { items.push({ name: modelFileName(), content: JSON.stringify(model, null, 2) }); }
+              TB.util.downloadBinary(bundleBase + '_bundle.zip', TB.zip.build(items), 'application/zip');
+              TB.ui.toast('Bundled ' + items.length + ' files into ' + bundleBase + '_bundle.zip', 'ok');
+            }
+          }));
+        }
 
         /* server-side simulator validation (only with the Flask backend up) */
         if (opts.validateKind && TB.backend && TB.backend.available && /\.py$/.test(f.name)) {

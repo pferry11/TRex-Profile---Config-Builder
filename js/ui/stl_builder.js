@@ -73,6 +73,14 @@
       var model = defaultModel();
       var selectedId = model.streams[0].id;
       var regenTimer = null;
+      var history = TB.history.create();
+      var histCtl = TB.ui.historyControls(history, function (m) {
+        model = m;
+        var found = false;
+        for (var i = 0; i < model.streams.length; i++) { if (model.streams[i].id === selectedId) { found = true; } }
+        if (!found) { selectedId = model.streams.length ? model.streams[0].id : null; }
+        renderAll();
+      });
 
       /* ---------- layout skeleton ---------- */
       var topbar = el('div', { class: 'builder-topbar' });
@@ -97,6 +105,7 @@
       function regen() {
         if (regenTimer) { clearTimeout(regenTimer); }
         regenTimer = setTimeout(function () {
+          history.record(model);
           var gen = TB.gen.resolve(model.trexVersion, 'stl');
           if (!gen) {
             outputPane.innerHTML = '';
@@ -128,6 +137,7 @@
         }));
 
         var actions = el('div', { class: 'topbar-actions' });
+        actions.appendChild(histCtl);
         actions.appendChild(el('button', {
           class: 'btn', text: 'New',
           onclick: function () {
