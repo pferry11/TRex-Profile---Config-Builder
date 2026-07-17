@@ -59,6 +59,27 @@
       ndrEngine: 'NDR engine', ndrRate: 'NDR profile rate', ndrPorts: 'NDR ports', ndrPdr: 'PDR %',
       ndrMults: 'NDR search bounds', ndrQfull: 'q-full %', ndrLatGate: 'NDR latency gate'
     },
+    emu: {
+      profileName: 'Profile name', nsCount: 'Namespaces (--ns)', vlan: 'VLAN per namespace', vlanTci: 'First VLAN tag',
+      clientCount: 'Clients (--clients)', clientMac: 'First client MAC', ipv4Enabled: 'IPv4', ipv4: 'First IPv4',
+      dg: 'Default gateway', ipv6Enabled: 'IPv6', ipv6: 'First IPv6',
+      arp: 'ARP plugin', arpTimer: 'ARP timer', icmp: 'ICMP plugin', igmp: 'IGMP plugin', igmpDmac: 'IGMP dmac',
+      ipv6nd: 'IPv6 ND plugin', ipv6ndDmac: 'ND dmac', dhcpv4: 'DHCPv4 plugin', dhcpClassId: 'DHCP class-id',
+      dhcpv6: 'DHCPv6 plugin', dns: 'DNS plugin', dnsMode: 'DNS role', dnsServerIp: 'Name server IP',
+      dnsDomain: 'DNS record domain', dnsType: 'DNS record type', dnsAnswer: 'DNS record answer',
+      mdns: 'mDNS plugin', mdnsHosts: 'mDNS host pattern', mdnsTtl: 'mDNS TTL', mdnsDomain: 'mDNS domain'
+    },
+    tpg: {
+      name: 'Config name', minVlan: 'Min VLAN', maxVlan: 'Max VLAN', qinqInner: 'QinQ inner VLAN',
+      qinqOuter: 'QinQ outer VLAN', numTpgids: 'num-tpgids', ports: 'Ports'
+    },
+    bird: {
+      name: 'Config name', routerId: 'Router id', nodePort: 'Node port', nodeMac: 'Node MAC', nodeIp: 'Node IPv4',
+      nodeSubnet: 'Node subnet', nodeIpv6: 'Node IPv6', bgpName: 'BGP instance name', bgpAf: 'BGP address family',
+      bgpLocal: 'BGP local IP', bgpNeighbor: 'BGP neighbor IP', bgpAs: 'AS number', ospf: 'OSPF', ospfArea: 'OSPF area',
+      rip: 'RIP', routeAf: 'Route address family', routePrefix: 'First prefix', routeLen: 'Prefix length',
+      routeCount: 'Route count', routeNextHop: 'Next hop'
+    },
     cfg: { server: 'Server' },
     cli: {
       server: 'Server', mode: 'Mode', profile: 'Profile', cfgPath: '--cfg path', cores: 'Cores (-c)',
@@ -100,7 +121,8 @@
   var CHAPTERS = [
     { id: 'start', title: 'Getting started', html: function () {
       return '<p>This app builds Cisco TRex configuration artifacts through forms: traffic profiles ' +
-        '(STL, ASTF, cap2), the platform config (trex_cfg.yaml), and launch commands. Nothing runs in the ' +
+        '(STL, ASTF, cap2), client emulation (EMU), per-VLAN rx stats (TPG), routing configs (BIRD), the platform ' +
+        'config (trex_cfg.yaml), and launch commands. Nothing runs in the ' +
         'browser - you <strong>Copy</strong> or <strong>Download</strong> the generated files and use them on your TRex box.</p>' +
         '<h4>Two ways to run the app</h4>' +
         '<ul><li><strong>No server:</strong> open <code>index.html</code> from disk. Everything works.</li>' +
@@ -187,6 +209,66 @@
         'data or the flow\'s client IP. This makes each replayed flow unique without editing the capture.</p>' +
         '<h4>Other flags</h4><p><code>cap_ipg</code> keeps the capture\'s real timing; the VLAN block alternates flows ' +
         'across two tags; <code>plugin_id</code> enables HTTP/DHCP-aware replay.</p>' + fieldTable('cap2');
+    } },
+
+    { id: 'emu', title: 'EMU (client emulation)', html: function () {
+      return tabIntro('emu') +
+        '<h4>What EMU is</h4><p>TRex-EMU is a separate Golang process (<code>./trex-emu</code>) that emulates the ' +
+        '<em>control plane</em> of many hosts: ARP, ICMP, IGMP, IPv6 ND, DHCPv4/v6, DNS and mDNS. Where STL/ASTF ' +
+        'push data-plane load, EMU makes the DUT believe real clients live behind the TRex ports - it answers pings, ' +
+        'leases addresses, joins multicast groups and serves names. Both can run at once: EMU holds the network ' +
+        'identity while a profile drives traffic.</p>' +
+        '<h4>Model</h4><p>Clients live in <strong>namespaces</strong> keyed by vport (optionally one 802.1Q VLAN per ' +
+        'namespace). Each client takes its MAC/IPv4/IPv6 by incrementing the base values - exactly the ' +
+        '<code>mac[i].V()</code> pattern of the shipped <code>emu/simple_*.py</code> examples. The generated profile ' +
+        'keeps <code>--ns</code> and <code>--clients</code> as load-time tunables, so scale changes need no ' +
+        'regeneration.</p>' +
+        '<h4>Plugins</h4><p>Tick only what the test needs: ARP + ICMP make clients reachable and pingable; DHCPv4 ' +
+        'clients start at 0.0.0.0 and lease addresses (with optional vendor class-ids); the DNS plugin can make every ' +
+        'client a resolver against a name server - or a name server itself, answering A/AAAA/TXT/PTR records you ' +
+        'define. The preset buttons mirror the shipped examples one-to-one.</p>' +
+        '<h4>Running it</h4><p>The generated <code>EMU_CONSOLE.txt</code> walks the three terminals: the TRex server ' +
+        '(<code>t-rex-64 -i</code>), the EMU server (<code>sudo ./trex-emu</code>, logs to ' +
+        '<code>/var/log/trex/emu_daemon_server.log</code>) and the console (<code>./trex-console --emu</code>) with ' +
+        'the <code>load_profile</code> line, tunables included.</p>' + fieldTable('emu');
+    } },
+
+    { id: 'tpg', title: 'TPG (Tagged Packet Group)', html: function () {
+      return tabIntro('tpg') +
+        '<h4>What TPG gives you</h4><p>Per-VLAN receive counters. Enable TPG with a tags file and TRex counts rx ' +
+        'packets, bytes and sequence errors <em>per tag</em> - one bucket per Dot1Q VLAN or QinQ inner/outer pair. ' +
+        'That answers questions like "which of my 100 VLANs dropped packets through the DUT?" without one stream per ' +
+        'counter on the rx side.</p>' +
+        '<h4>The tags file</h4><p>This tab generates <code>&lt;name&gt;_tpg_tags.json</code>: a list whose ' +
+        '<strong>index is the tag id</strong>. QinQ pairs come first, then every VLAN of each Dot1Q range in order - ' +
+        'the same shapes as the shipped <code>stl/tpg_tags_conf.py</code>. The builder warns on out-of-range or ' +
+        'duplicate VLANs.</p>' +
+        '<h4>Using it</h4><p>The <code>TPG_CONSOLE.txt</code> runbook has the verified console sequence: ' +
+        '<code>tpg_enable --ports 0 1 --num-tpgids N --tags file.json</code>, then start streams whose ' +
+        '<code>flow_stats=STLTaggedPktGroup(tpgid=i)</code> (build them in the STL tab with a VLAN per stream, like ' +
+        'stl/tpg_1tag_stream.py), read <code>tpg_stats</code> per port/tpgid/tag range, and <code>tpg_disable</code> ' +
+        'when done.</p>' +
+        '<p class="man-note">num-tpgids is an upper bound: every stream\'s tpgid must stay below it.</p>' +
+        fieldTable('tpg');
+    } },
+
+    { id: 'bird', title: 'BIRD routing configs', html: function () {
+      return tabIntro('bird') +
+        '<h4>What the integration is</h4><p>TRex ships the BIRD routing daemon and runs it inside a Linux network ' +
+        'namespace wired to the traffic ports via veth nodes. BIRD then speaks real BGP/OSPF/RIP with the DUT and can ' +
+        'advertise huge route tables - so routed DUTs forward the test traffic exactly as they would production ' +
+        'routes.</p>' +
+        '<h4>This tab</h4><p>Builds <code>bird_&lt;name&gt;.conf</code> in the exact shipped <code>bird/cfg</code> ' +
+        'shapes: BGP instances (local/neighbor IP + AS per session, IPv4 or IPv6 channel), OSPF (broadcast on all ' +
+        'interfaces), RIP, and static-route tables where the builder expands <em>count</em> consecutive prefixes ' +
+        'from a first prefix (stepping by the prefix size so they never overlap).</p>' +
+        '<h4>Running it</h4><p><code>BIRD_RUNBOOK.txt</code> covers the prerequisites and the verified console flow: ' +
+        '<code>stack: linux_based</code> in trex_cfg.yaml, <code>t-rex-64 -i --bird-server</code>, then ' +
+        '<code>plugins load bird</code>, <code>plugins bird add_node</code> (the veth interface BIRD peers through) ' +
+        'and <code>plugins bird set_config -f bird_&lt;name&gt;.conf</code>. For millions of routes the runbook shows ' +
+        'the server-side generation flags (<code>--first-ip --total-routes --next-hop</code>) instead of writing ' +
+        'every line into the file - the builder caps the emitted table at 5000 and warns.</p>' +
+        fieldTable('bird');
     } },
 
     { id: 'scenarios', title: 'Scenarios (wizards)', html: function () {
@@ -319,9 +401,9 @@
         ['Scenarios', 'NDR benchmark wizard', 'Drive the shipped ./ndr script: find the no-drop rate automatically instead of manual -m stepping.', 'Medium', 'done'],
         ['Scenarios', 'N-stage ramp', 'Generalise the low/mid/high wizard to any number of stages.', 'Small', 'done'],
         ['Scenarios', 'Bidirectional two-server', 'Both boxes run client AND server roles simultaneously (client masks on both sides).', 'Medium', 'done'],
-        ['New domain', 'TRex-EMU profiles', 'Client emulation profiles: ARP, DHCPv4/v6, ICMP, IGMP, IPv6 ND, DNS/mDNS - a whole additional TRex subsystem.', 'Large', 'planned'],
-        ['New domain', 'TPG configuration', 'Tagged Packet Group setup (tpg_tags_conf.json) for per-tag rx stats on DOT1Q/QinQ.', 'Medium', 'planned'],
-        ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large', 'planned'],
+        ['New domain', 'TRex-EMU profiles', 'Client emulation profiles: ARP, DHCPv4/v6, ICMP, IGMP, IPv6 ND, DNS/mDNS - a whole additional TRex subsystem.', 'Large', 'done'],
+        ['New domain', 'TPG configuration', 'Tagged Packet Group setup (tpg_tags_conf.json) for per-tag rx stats on DOT1Q/QinQ.', 'Medium', 'done'],
+        ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large', 'done'],
         ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small', 'planned'],
         ['App platform', 'Live TRex control', 'Extend the Flask backend to the TRex automation API: push a profile, start/stop, live stats - the app becomes a controller, not just a generator.', 'Large', 'planned'],
         ['App platform', 'Import existing .py profiles', 'Parse shipped/hand-written profiles back into editable models. Python parsing in JS is genuinely hard - realistic only for app-generated files.', 'Large', 'planned'],
@@ -333,7 +415,7 @@
       var pending = rows.filter(function (r) { return r[4] !== 'done'; }).length;
       return '<p>Candidate improvements, mapped against the full TRex feature set ' +
         '(trex-tgn.cisco.com). None are required for day-to-day use - the current app covers STL, ASTF, cap2, ' +
-        'platform config, CLI and the two key scenarios end to end.</p>' +
+        'EMU, TPG, BIRD, platform config, CLI and the scenario wizards end to end.</p>' +
         '<p class="man-purpose">' + pending + ' of ' + rows.length + ' open. Status lives only here - flip the ' +
         '5th field of a row in js/ui/manual.js when work starts or finishes.</p>' +
         '<table class="man-table"><tr><th>Area</th><th>Improvement</th><th>What it adds</th><th>Effort</th><th>Status</th></tr>' +

@@ -14,7 +14,7 @@ $edge = @(
 if (-not $edge) { Write-Error "Microsoft Edge not found"; exit 1 }
 
 $index = (Join-Path $repo "index.html") -replace '\\', '/'
-$tabs = @("stl", "astf", "cap2", "scenarios", "cfg", "cli", "settings")
+$tabs = @("stl", "astf", "cap2", "emu", "tpg", "bird", "scenarios", "cfg", "cli", "settings")
 
 foreach ($tab in $tabs) {
     $out = Join-Path $imgDir "$tab.png"

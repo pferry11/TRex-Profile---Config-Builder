@@ -244,6 +244,93 @@
       prefix: 'Instance name prefix for running multiple TRex instances on one box.',
       zmqPub: 'Enable the ZMQ stats publisher.',
       telnetPort: 'Legacy telnet console port.'
+    },
+
+    emu: {
+      _tab: 'Builds TRex-EMU client-emulation profiles: hundreds of emulated hosts that ARP, answer pings, lease DHCP addresses, join multicast groups and serve DNS/mDNS - the control-plane side of a test, driven by the separate trex-emu process.',
+      _sections: {
+        ns: 'EMU groups clients into namespaces keyed by vport (and optionally an 802.1Q tag). The --ns tunable creates N namespaces, incrementing the vport.',
+        clients: 'The emulated hosts. Base MAC/IPv4/IPv6 values increment per client (mac[i], ipv4[i]...), exactly like the shipped emu/simple_*.py examples.',
+        plugins: 'Per-protocol behaviours attached to every client (and matching namespace-level defaults). Enable only what the test needs.',
+        dnsRecords: 'The zone database a DNS name-server client answers from: domain, record type and answer per entry.'
+      },
+      profileName: 'Name used for the generated .py file and when saving/loading this profile in the app.',
+      nsCount: 'Number of namespaces to create (--ns tunable, one vport each). Most tests use 1.',
+      vlan: 'Tag each namespace with an 802.1Q VLAN: tci increments with the vport so every namespace lands on its own VLAN.',
+      vlanTci: 'VLAN tag of the first namespace; later namespaces increment from it.',
+      clientCount: 'Clients per namespace (--clients tunable). EMU scales to many thousands.',
+      clientMac: 'MAC of the first client; each further client increments it by one.',
+      ipv4Enabled: 'Give clients static IPv4 addresses (incrementing). Untick when DHCPv4 should assign them.',
+      ipv4: 'IPv4 of the first client; increments per client.',
+      dg: 'Default gateway all clients use - normally the DUT-side router address.',
+      ipv6Enabled: 'Give clients IPv6 addresses (incrementing).',
+      ipv6: 'IPv6 of the first client; increments per client.',
+      arp: 'Resolve and answer ARP - almost always on, or nothing can reach the clients.',
+      arpTimer: 'Optional ARP refresh timer in seconds.',
+      icmp: 'Answer ICMP echo - makes every emulated client pingable.',
+      igmp: 'Join multicast groups via IGMP (namespace-level, needs the router MAC as dmac).',
+      igmpDmac: 'Destination MAC for IGMP messages - the multicast router. Defaults to the first client MAC.',
+      ipv6nd: 'IPv6 Neighbour Discovery: RS/NS/NA handling for the clients (the "ipv6" EMU plugin).',
+      ipv6ndDmac: 'Destination MAC for IPv6 ND messages - the router. Defaults to the first client MAC.',
+      dhcpv4: 'Lease IPv4 addresses over DHCP (discover/offer/request/ack). Clients then start at 0.0.0.0.',
+      dhcpClassId: 'Optional vendor class-id option (60) sent in the discover/request messages.',
+      dhcpv6: 'Lease IPv6 addresses over DHCPv6. Needs the IPv6 ND plugin.',
+      dns: 'DNS plugin: clients either query a name server (resolver role) or answer as one (server role).',
+      dnsMode: 'resolver client = sends queries to the name server IP; name server = answers from the records database.',
+      dnsServerIp: 'IP (v4 or v6) of the DNS server the resolver clients query.',
+      dnsDomain: 'Domain this record answers for, e.g. cisco.com.',
+      dnsType: 'Record type: A (IPv4), AAAA (IPv6), TXT (free text) or PTR (reverse lookup).',
+      dnsAnswer: 'The answer returned: an address for A/AAAA, text for TXT, a hostname for PTR.',
+      mdns: 'Multicast DNS: clients announce hostnames and answer .local queries (needs IPv6 too, like emu/simple_mdns.py).',
+      mdnsHosts: 'Hostname pattern each client announces; {} is replaced with the client number, e.g. client-{}.emu.',
+      mdnsTtl: 'TTL in seconds for mDNS responses.',
+      mdnsDomain: 'Optional mDNS domain name field.'
+    },
+
+    tpg: {
+      _tab: 'Builds the Tagged Packet Group tags file: per-VLAN rx counters (packets, bytes, sequence errors) for Dot1Q and QinQ traffic, enabled from the console with tpg_enable.',
+      _sections: {
+        dot1q: 'Each VLAN in a range becomes one tag id: received packets carrying that 802.1Q tag are counted in their own bucket.',
+        qinq: 'Each inner/outer VLAN pair becomes one tag id for 802.1ad QinQ traffic. QinQ entries take the first tag ids.',
+        enable: 'Parameters of the tpg_enable console command that loads this file.'
+      },
+      name: 'Name used for the generated _tpg_tags.json file and when saving this config.',
+      minVlan: 'First VLAN of the range (1-4094).',
+      maxVlan: 'Last VLAN of the range, inclusive.',
+      qinqInner: 'Inner (customer, 802.1Q) VLAN of the pair.',
+      qinqOuter: 'Outer (service, 802.1ad) VLAN of the pair.',
+      numTpgids: 'Upper bound of tpgid values the tx streams will use: every TPG stream needs flow_stats=STLTaggedPktGroup(tpgid=i) with i below this.',
+      ports: 'Ports to enable TPG rx counting on (space separated, e.g. "0 1").'
+    },
+
+    bird: {
+      _tab: 'Builds a BIRD routing daemon config for TRex\'s BIRD integration: BGP/OSPF/RIP sessions and generated static-route tables, advertised to the DUT through a veth node inside TRex.',
+      _sections: {
+        general: 'The BIRD router identity plus the veth node the runbook creates on a traffic port (this is the interface BIRD peers through).',
+        bgp: 'One BGP protocol block per peering session with the DUT. Run several instances to peer on multiple interfaces.',
+        igp: 'Interior gateway protocols on all BIRD interfaces, in the exact shipped bird/cfg shapes.',
+        routes: 'Static route tables BIRD advertises: the builder expands "count" consecutive prefixes from the first one.'
+      },
+      name: 'Name used for the generated bird_<name>.conf and when saving this config.',
+      routerId: 'BIRD router id in dotted-quad form. Any unique IPv4-shaped value works.',
+      nodePort: 'TRex port the bird veth node attaches to.',
+      nodeMac: 'MAC of the veth node inside the BIRD namespace.',
+      nodeIp: 'IPv4 of the bird node - BGP "local" addresses must live on this interface.',
+      nodeSubnet: 'Prefix length of the node address.',
+      nodeIpv6: 'Optionally give the node an IPv6 address for IPv6 peering.',
+      bgpName: 'BIRD protocol instance name - must be unique in the config.',
+      bgpAf: 'Address family of the session channel (ipv4 or ipv6 import/export).',
+      bgpLocal: 'Local session address (an address of the bird node) - "local <ip> as <asn>".',
+      bgpNeighbor: 'Peer address on the DUT - "neighbor <ip> as <asn>".',
+      bgpAs: 'Autonomous system number (same on both = iBGP, different = eBGP).',
+      ospf: 'OSPF on all BIRD interfaces as broadcast type, importing and exporting everything.',
+      ospfArea: 'OSPF area number (0 = backbone).',
+      rip: 'RIP in multicast mode on all BIRD interfaces.',
+      routeAf: 'IPv4 blocks can generate many consecutive prefixes; IPv6 blocks emit a single route.',
+      routePrefix: 'First destination prefix, e.g. 42.42.42.0.',
+      routeLen: 'Prefix length; consecutive routes step by the prefix size so they never overlap.',
+      routeCount: 'How many consecutive prefixes to emit. Above 5000 use the runbook\'s server-side generation instead.',
+      routeNextHop: 'Next hop for every generated route - best practice is the bird node\'s own address.'
     }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

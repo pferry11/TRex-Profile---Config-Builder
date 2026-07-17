@@ -66,6 +66,9 @@
 <script src="js/gen/cfg.js"></script>
 <script src="js/gen/cli.js"></script>
 <script src="js/gen/cap2.js"></script>
+<script src="js/gen/emu.js"></script>
+<script src="js/gen/tpg.js"></script>
+<script src="js/gen/bird.js"></script>
 
 <script>
 'use strict';
@@ -1608,6 +1611,403 @@ test('cfg warnings: thread collision, core excess, mixed modes, iface count, cro
   return { pass: !fails.length, detail: fails.join(', ') };
 });
 
+/* ---------------- new domains: EMU / TPG / BIRD (v0.19.0) ---------------- */
+var emuGen = TB.gen.resolve('3.06', 'emu');
+var tpgGen = TB.gen.resolve('3.06', 'tpg');
+var birdGen = TB.gen.resolve('3.06', 'bird');
+
+function emuModel(over) {
+  var m = {
+    kind: 'emu', schemaVersion: 1, trexVersion: '3.06',
+    meta: { name: 'emu_clients', description: '', modified: '' },
+    nsCount: 1, vlan: { enabled: false, tci: 1 }, trexDir: '/opt/trex/v3.06',
+    clients: { count: 15, mac: '00:00:00:70:00:01',
+               ipv4Enabled: true, ipv4: '1.1.2.3', dg: '1.1.2.1',
+               ipv6Enabled: true, ipv6: '2001:DB8:1::2' },
+    plugins: {
+      arp: { enabled: true, timer: 50 },
+      icmp: { enabled: true },
+      igmp: { enabled: true, dmac: '00:00:00:70:00:01' },
+      ipv6nd: { enabled: false, dmac: null },
+      dhcpv4: { enabled: false, discoverClassId: null, requestClassId: null },
+      dhcpv6: { enabled: false },
+      dns: { enabled: false, mode: 'client', serverIp: '1.1.2.1', records: [] },
+      mdns: { enabled: false, hostPattern: 'client-{}.emu', ttl: 240, domainName: null }
+    }
+  };
+  for (var k in (over || {})) { m[k] = over[k]; }
+  return m;
+}
+
+var fxEmu = emuModel();
+
+var fxEmuDhcp = (function () {
+  var m = emuModel({ meta: { name: 'emu_dhcp', description: '', modified: '' } });
+  m.clients.ipv4Enabled = false;
+  m.clients.ipv6Enabled = false;
+  m.plugins.arp.timer = null;
+  m.plugins.igmp.enabled = false;
+  m.plugins.dhcpv4 = { enabled: true, discoverClassId: 'MSFT 5.0', requestClassId: 'MSFT 5.0' };
+  return m;
+})();
+
+var fxEmuDns = (function () {
+  var m = emuModel({ meta: { name: 'emu_dns', description: '', modified: '' } });
+  m.plugins.igmp.enabled = false;
+  m.plugins.arp.timer = null;
+  m.plugins.ipv6nd = { enabled: true, dmac: null };
+  m.plugins.dns = { enabled: true, mode: 'server', serverIp: '', records: [
+    { domain: 'trex-tgn.cisco.com', type: 'A', answer: '173.36.109.208' },
+    { domain: 'cisco.com', type: 'A', answer: '72.163.4.185' },
+    { domain: 'cisco.com', type: 'AAAA', answer: '2001:420:1101:1::185' }
+  ] };
+  m.plugins.mdns = { enabled: true, hostPattern: 'client-{}.emu', ttl: 240, domainName: 'test.local' };
+  return m;
+})();
+
+var fxTpg = {
+  kind: 'tpg', schemaVersion: 1, trexVersion: '3.06',
+  meta: { name: 'vlan_sweep', description: '', modified: '' },
+  qinq: [{ inner: 1, outer: 100 }],
+  dot1q: [{ minVlan: 1, maxVlan: 5 }],
+  numTpgids: 6, ports: '0 1'
+};
+
+var fxBird = {
+  kind: 'bird', schemaVersion: 1, trexVersion: '3.06',
+  meta: { name: 'bgp_dut', description: '', modified: '' },
+  routerId: '100.100.100.100',
+  bgp: [
+    { name: 'my_bgp1', localIp: '1.1.1.3', localAs: 65000, neighborIp: '1.1.1.1', neighborAs: 65000, ipv6: false },
+    { name: 'my_bgp2', localIp: '1.1.2.3', localAs: 65000, neighborIp: '1.1.2.1', neighborAs: 65000, ipv6: false }
+  ],
+  ospf: { enabled: false, area: 0 },
+  rip: { enabled: false },
+  staticRoutes: [{ ipv6: false, prefix: '42.42.42.0', prefixLen: 32, count: 11, nextHop: '1.1.1.3' }],
+  node: { port: 0, mac: '00:00:00:01:00:07', ipv4: '1.1.1.3', ipv4Subnet: 24,
+          ipv6Enabled: false, ipv6: null, ipv6Subnet: 124 },
+  trexDir: '/opt/trex/v3.06'
+};
+
+var fxBirdIgp = (function () {
+  var m = JSON.parse(JSON.stringify(fxBird));
+  m.meta.name = 'igp_mix';
+  m.bgp = [];
+  m.ospf = { enabled: true, area: 0 };
+  m.rip = { enabled: true };
+  m.staticRoutes = [
+    { ipv6: false, prefix: '10.10.0.0', prefixLen: 24, count: 3, nextHop: '1.1.1.3' },
+    { ipv6: true, prefix: '2001:db8:100::', prefixLen: 64, count: 1, nextHop: '2001:db8::1' }
+  ];
+  return m;
+})();
+
+var goldenEmu =
+'# -----------------------------------------------------------------------------\n' +
+'# TRex Profile & Config Builder - TRex-EMU client emulation profile\n' +
+'# Generated: 2026-07-06\n' +
+'# Target: TRex v3.06\n' +
+'# Load on the box: ./trex-console --emu   then   trex>load_profile -f emu_clients.py\n' +
+'# Re-edit: load emu_clients.trexb.json in TRex Profile & Config Builder\n' +
+'# Summary:\n' +
+'#   Emulates 15 clients in each of 1 namespace: MACs from 00:00:00:70:00:01, IPv4 from 1.1.2.3 via gateway 1.1.2.1, IPv6 from 2001:DB8:1::2.\n' +
+'#   Plugins: ARP (timer 50 s), ICMP, IGMP.\n' +
+'#   Load from trex-console --emu: load_profile -f <file> -t --ns 1 --clients 15.\n' +
+'# -----------------------------------------------------------------------------\n' +
+'from trex.emu.api import *\n' +
+'import argparse\n' +
+'\n' +
+'\n' +
+'class Prof1():\n' +
+'    def __init__(self):\n' +
+"        self.def_ns_plugs = {'arp': {'enable': True},\n" +
+"                             'icmp': {},\n" +
+"                             'igmp': {'dmac': Mac('00:00:00:70:00:01').V()}}\n" +
+"        self.def_c_plugs = {'arp': {'enable': True, 'timer': 50},\n" +
+"                            'icmp': {}}\n" +
+'\n' +
+'    def create_profile(self, ns_size, clients_size):\n' +
+'        ns_list = []\n' +
+'        vport, tci, tpid = 0, [0, 0], [0x00, 0x00]\n' +
+'        for i in range(vport, ns_size + vport):\n' +
+'            ns_key = EMUNamespaceKey(vport = i,\n' +
+'                                     tci   = tci,\n' +
+'                                     tpid  = tpid)\n' +
+'            ns = EMUNamespaceObj(ns_key = ns_key, def_c_plugs = self.def_c_plugs)\n' +
+'\n' +
+"            mac  = Mac('00:00:00:70:00:01')\n" +
+"            ipv4 = Ipv4('1.1.2.3')\n" +
+"            dg   = Ipv4('1.1.2.1')\n" +
+"            ipv6 = Ipv6('2001:DB8:1::2')\n" +
+'\n' +
+'            # each client increments mac/ipv4/ipv6 from the base value\n' +
+'            for j in range(clients_size):\n' +
+'                client = EMUClientObj(mac     = mac[j].V(),\n' +
+'                                      ipv4    = ipv4[j].V(),\n' +
+'                                      ipv4_dg = dg.V(),\n' +
+'                                      ipv6    = ipv6[j].V(),\n' +
+"                                      plugs   = {'igmp': {}})\n" +
+'                ns.add_clients(client)\n' +
+'            ns_list.append(ns)\n' +
+'\n' +
+'        return EMUProfile(ns = ns_list, def_ns_plugs = self.def_ns_plugs)\n' +
+'\n' +
+'    def get_profile(self, tuneables):\n' +
+"        parser = argparse.ArgumentParser(description='trexb generated EMU profile',\n" +
+'                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)\n' +
+"        parser.add_argument('--ns', type=int, default=1,\n" +
+"                            help='Number of namespaces to create')\n" +
+"        parser.add_argument('--clients', type=int, default=15,\n" +
+"                            help='Number of clients to create in each namespace')\n" +
+'        args = parser.parse_args(tuneables)\n' +
+'\n' +
+"        assert 0 < args.ns < 65535, 'Namespaces must be positive and below 65535!'\n" +
+"        assert 0 < args.clients, 'Clients must be positive!'\n" +
+'\n' +
+'        return self.create_profile(args.ns, args.clients)\n' +
+'\n' +
+'\n' +
+'def register():\n' +
+'    return Prof1()\n';
+
+var goldenTpgTags =
+'[\n' +
+'  { "type": "QinQ", "value": { "vlans": [1, 100] } },\n' +
+'  { "type": "Dot1Q", "value": { "vlan": 1 } },\n' +
+'  { "type": "Dot1Q", "value": { "vlan": 2 } },\n' +
+'  { "type": "Dot1Q", "value": { "vlan": 3 } },\n' +
+'  { "type": "Dot1Q", "value": { "vlan": 4 } },\n' +
+'  { "type": "Dot1Q", "value": { "vlan": 5 } }\n' +
+']\n';
+
+var goldenBird =
+'# -----------------------------------------------------------------------------\n' +
+'# TRex Profile & Config Builder - BIRD routing config\n' +
+'# Generated: 2026-07-06   Target: TRex v3.06 (BIRD integration)\n' +
+'# Push from trex-console: plugins bird set_config -f bird_bgp_dut.conf\n' +
+'# Re-edit: load bgp_dut.trexb.json in TRex Profile & Config Builder\n' +
+'# Summary:\n' +
+'#   BIRD config (router id 100.100.100.100): BGP my_bgp1 (IPv4): AS 65000 at 1.1.1.3 peering with AS 65000 at 1.1.1.1; BGP my_bgp2 (IPv4): AS 65000 at 1.1.2.3 peering with AS 65000 at 1.1.2.1.\n' +
+'#   Advertises 11 static routes from 42.42.42.0/32 via 1.1.1.3.\n' +
+'#   The runbook creates a bird veth node on port 0 (1.1.1.3/24) and pushes the config over the console bird plugin.\n' +
+'# -----------------------------------------------------------------------------\n' +
+'\n' +
+'router id 100.100.100.100;\n' +
+'\n' +
+'# device scan keeps BIRD tracking the veth interfaces TRex creates\n' +
+'protocol device {\n' +
+'    scan time 1;\n' +
+'}\n' +
+'\n' +
+'protocol bgp my_bgp1 {\n' +
+'    local 1.1.1.3 as 65000;\n' +
+'    neighbor 1.1.1.1 as 65000;\n' +
+'    ipv4 {\n' +
+'        import all;\n' +
+'        export all;\n' +
+'    };\n' +
+'}\n' +
+'\n' +
+'protocol bgp my_bgp2 {\n' +
+'    local 1.1.2.3 as 65000;\n' +
+'    neighbor 1.1.2.1 as 65000;\n' +
+'    ipv4 {\n' +
+'        import all;\n' +
+'        export all;\n' +
+'    };\n' +
+'}\n' +
+'\n' +
+'protocol static {\n' +
+'    ipv4 {\n' +
+'        import all;\n' +
+'        export all;\n' +
+'    };\n' +
+'\n' +
+'    route 42.42.42.0/32 via 1.1.1.3;\n' +
+'    route 42.42.42.1/32 via 1.1.1.3;\n' +
+'    route 42.42.42.2/32 via 1.1.1.3;\n' +
+'    route 42.42.42.3/32 via 1.1.1.3;\n' +
+'    route 42.42.42.4/32 via 1.1.1.3;\n' +
+'    route 42.42.42.5/32 via 1.1.1.3;\n' +
+'    route 42.42.42.6/32 via 1.1.1.3;\n' +
+'    route 42.42.42.7/32 via 1.1.1.3;\n' +
+'    route 42.42.42.8/32 via 1.1.1.3;\n' +
+'    route 42.42.42.9/32 via 1.1.1.3;\n' +
+'    route 42.42.42.10/32 via 1.1.1.3;\n' +
+'}\n';
+
+test('EMU golden: ARP/ICMP/IGMP clients (simple_emu-like)', function () {
+  var r = emuGen(fxEmu, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  if (r.files[0].name !== 'emu_clients.py') { return { pass: false, detail: 'file name ' + r.files[0].name }; }
+  if (r.files[0].content !== goldenEmu) { return { pass: false, detail: firstDiff(goldenEmu, r.files[0].content) }; }
+  var rb = r.files[1].content;
+  var ok = r.files[1].name === 'EMU_CONSOLE.txt' &&
+    rb.indexOf('sudo ./trex-emu') !== -1 &&
+    rb.indexOf('./trex-console --emu') !== -1 &&
+    rb.indexOf('trex>load_profile -f emu_clients.py -t --ns 1 --clients 15') !== -1 &&
+    rb.indexOf('trex>remove_profile') !== -1;
+  return { pass: ok, detail: ok ? '' : 'runbook missing a verified console line' };
+});
+
+test('EMU structure: DHCPv4 preset - clients start at 0.0.0.0 with class-id options', function () {
+  var r = emuGen(fxEmuDhcp, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  var c = r.files[0].content;
+  var needles = [
+    "ipv4 = Ipv4('0.0.0.0')",
+    "'dhcp': {'options': {'discoverDhcpClassIdOption': 'MSFT 5.0', 'requestDhcpClassIdOption': 'MSFT 5.0'}}",
+    'ipv4    = ipv4.V()'
+  ];
+  var missing = needles.filter(function (x) { return c.indexOf(x) === -1; });
+  return { pass: !missing.length, detail: missing.length ? 'missing: ' + TB.util.escapeHtml(missing.join(' | ')) : '' };
+});
+
+test('EMU structure: DNS name-server database + mDNS init-json helpers', function () {
+  var r = emuGen(fxEmuDns, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  var c = r.files[0].content;
+  var needles = [
+    'def get_dns_init_json(self):',
+    "'name_server': True,",
+    "'cisco.com': [",
+    "{'type': 'AAAA', 'class': 'IN', 'answer': '2001:420:1101:1::185'}",
+    'def get_mdns_init_json(self, client):',
+    "'hosts': ['client-{}.emu'.format(client)],",
+    "init_json['domain_name'] = 'test.local'",
+    "'ipv6': {'dmac': Mac('00:00:00:70:00:01').V()}",
+    "'dns': self.get_dns_init_json()",
+    "'mdns': self.get_mdns_init_json(j)"
+  ];
+  var missing = needles.filter(function (x) { return c.indexOf(x) === -1; });
+  return { pass: !missing.length, detail: missing.length ? 'missing: ' + TB.util.escapeHtml(missing.join(' | ')) : '' };
+});
+
+test('EMU warnings: bad MAC, DHCPv6 without ND, static IPv4 + DHCP, no plugins', function () {
+  var fails = [];
+  var m = JSON.parse(JSON.stringify(fxEmu));
+  m.clients.mac = 'nonsense';
+  if (!emuGen(m, NOW).warnings.some(function (x) { return x.indexOf('not a valid MAC address') !== -1; })) { fails.push('mac'); }
+  m = JSON.parse(JSON.stringify(fxEmu));
+  m.plugins.dhcpv6.enabled = true;
+  if (!emuGen(m, NOW).warnings.some(function (x) { return x.indexOf('DHCPv6 needs the IPv6 (ND) plugin') !== -1; })) { fails.push('dhcpv6-nd'); }
+  m = JSON.parse(JSON.stringify(fxEmu));
+  m.plugins.dhcpv4.enabled = true;
+  if (!emuGen(m, NOW).warnings.some(function (x) { return x.indexOf('DHCP clients normally start at 0.0.0.0') !== -1; })) { fails.push('static+dhcp'); }
+  m = JSON.parse(JSON.stringify(fxEmu));
+  ['arp', 'icmp', 'igmp'].forEach(function (k) { m.plugins[k].enabled = false; });
+  if (!emuGen(m, NOW).warnings.some(function (x) { return x.indexOf('No plugins enabled') !== -1; })) { fails.push('no-plugins'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('EMU round-trip: model -> JSON -> parse -> regenerate identical', function () {
+  var once = emuGen(fxEmu, NOW).files.map(function (f) { return f.content; }).join('');
+  var twice = emuGen(JSON.parse(JSON.stringify(fxEmu)), NOW).files.map(function (f) { return f.content; }).join('');
+  return { pass: once === twice, detail: once === twice ? '' : firstDiff(once, twice) };
+});
+
+test('TPG golden: QinQ + Dot1Q tags JSON (tpg_tags_conf-like)', function () {
+  var r = tpgGen(fxTpg, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  if (r.files[0].name !== 'vlan_sweep_tpg_tags.json') { return { pass: false, detail: 'file name ' + r.files[0].name }; }
+  if (r.files[0].content !== goldenTpgTags) { return { pass: false, detail: firstDiff(goldenTpgTags, r.files[0].content) }; }
+  if (r.totalTags !== 6) { return { pass: false, detail: 'totalTags ' + r.totalTags + ' != 6' }; }
+  try { JSON.parse(r.files[0].content); } catch (e) { return { pass: false, detail: 'not valid JSON: ' + e.message }; }
+  return { pass: true };
+});
+
+test('TPG console: verified tpg_enable / tpg_stats / tpg_disable lines', function () {
+  var rb = tpgGen(fxTpg, NOW).files[1].content;
+  var needles = [
+    'trex>tpg_enable --ports 0 1 --num-tpgids 6 --tags vlan_sweep_tpg_tags.json',
+    'trex>tpg_status',
+    'flow_stats=STLTaggedPktGroup(tpgid=i)',
+    'trex>tpg_stats --port 1 --tpgid 0 --min-tag 0 --max-tag 6',
+    'trex>tpg_disable'
+  ];
+  var missing = needles.filter(function (x) { return rb.indexOf(x) === -1; });
+  return { pass: !missing.length, detail: missing.length ? 'missing: ' + TB.util.escapeHtml(missing.join(' | ')) : '' };
+});
+
+test('TPG warnings: vlan range, duplicate vlans, empty tags, num-tpgids', function () {
+  var fails = [];
+  var m = JSON.parse(JSON.stringify(fxTpg));
+  m.dot1q = [{ minVlan: 0, maxVlan: 5000 }];
+  if (!tpgGen(m, NOW).warnings.some(function (x) { return x.indexOf('must stay within 1-4094') !== -1; })) { fails.push('range'); }
+  m = JSON.parse(JSON.stringify(fxTpg));
+  m.dot1q = [{ minVlan: 1, maxVlan: 5 }, { minVlan: 3, maxVlan: 8 }];
+  if (!tpgGen(m, NOW).warnings.some(function (x) { return x.indexOf('appears in more than one range') !== -1; })) { fails.push('dup'); }
+  m = JSON.parse(JSON.stringify(fxTpg));
+  m.qinq = []; m.dot1q = [];
+  if (!tpgGen(m, NOW).warnings.some(function (x) { return x.indexOf('No tags defined') !== -1; })) { fails.push('empty'); }
+  m = JSON.parse(JSON.stringify(fxTpg));
+  m.numTpgids = 0;
+  if (!tpgGen(m, NOW).warnings.some(function (x) { return x.indexOf('num-tpgids must be positive') !== -1; })) { fails.push('tpgids'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('BIRD golden: two BGP instances + generated static routes (bgp.conf-like)', function () {
+  var r = birdGen(fxBird, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  if (r.files[0].name !== 'bird_bgp_dut.conf') { return { pass: false, detail: 'file name ' + r.files[0].name }; }
+  if (r.files[0].content !== goldenBird) { return { pass: false, detail: firstDiff(goldenBird, r.files[0].content) }; }
+  return { pass: true };
+});
+
+test('BIRD structure: OSPF/RIP blocks + IPv6 static + runbook console lines', function () {
+  var r = birdGen(fxBirdIgp, NOW);
+  if (r.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + r.warnings.join(' | ') }; }
+  var c = r.files[0].content;
+  var rb = r.files[1].content;
+  var needles = [
+    'protocol ospf {', 'area 0 {', 'type broadcast;',
+    'protocol rip {', 'mode multicast;',
+    'route 10.10.0.0/24 via 1.1.1.3;', 'route 10.10.2.0/24 via 1.1.1.3;',
+    'route 2001:db8:100::/64 via 2001:db8::1;'
+  ];
+  var missing = needles.filter(function (x) { return c.indexOf(x) === -1; });
+  var rbNeedles = [
+    'stack: linux_based',
+    'sudo ./t-rex-64 -i --bird-server',
+    'trex>plugins load bird',
+    'trex>plugins bird add_node -p 0 -m 00:00:00:01:00:07 --ipv4 1.1.1.3 --ipv4-subnet 24',
+    'trex>plugins bird set_config -f bird_igp_mix.conf',
+    'trex>plugins bird show_protocols'
+  ];
+  missing = missing.concat(rbNeedles.filter(function (x) { return rb.indexOf(x) === -1; }));
+  return { pass: !missing.length, detail: missing.length ? 'missing: ' + TB.util.escapeHtml(missing.join(' | ')) : '' };
+});
+
+test('BIRD warnings: router id, AS bounds, duplicate names, route cap', function () {
+  var fails = [];
+  var m = JSON.parse(JSON.stringify(fxBird));
+  m.routerId = 'not-an-ip';
+  if (!birdGen(m, NOW).warnings.some(function (x) { return x.indexOf('not in IPv4 form') !== -1; })) { fails.push('router-id'); }
+  m = JSON.parse(JSON.stringify(fxBird));
+  m.bgp[0].localAs = 0;
+  if (!birdGen(m, NOW).warnings.some(function (x) { return x.indexOf('local AS must be 1-4294967295') !== -1; })) { fails.push('as'); }
+  m = JSON.parse(JSON.stringify(fxBird));
+  m.bgp[1].name = 'my_bgp1';
+  if (!birdGen(m, NOW).warnings.some(function (x) { return x.indexOf('share the name') !== -1; })) { fails.push('dup-name'); }
+  m = JSON.parse(JSON.stringify(fxBird));
+  m.staticRoutes[0].count = 6000;
+  var r = birdGen(m, NOW);
+  if (!r.warnings.some(function (x) { return x.indexOf('only the first 5000') !== -1; })) { fails.push('cap-warn'); }
+  var routeLines = r.files[0].content.split('\n').filter(function (l) { return l.indexOf('    route ') === 0; }).length;
+  if (routeLines !== 5000) { fails.push('cap-count(' + routeLines + ')'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
+test('BIRD round-trip: model -> JSON -> parse -> regenerate identical', function () {
+  var once = birdGen(fxBird, NOW).files.map(function (f) { return f.content; }).join('');
+  var twice = birdGen(JSON.parse(JSON.stringify(fxBird)), NOW).files.map(function (f) { return f.content; }).join('');
+  var ok = once === twice;
+  var t1 = tpgGen(fxTpg, NOW).files.map(function (f) { return f.content; }).join('');
+  var t2 = tpgGen(JSON.parse(JSON.stringify(fxTpg)), NOW).files.map(function (f) { return f.content; }).join('');
+  ok = ok && t1 === t2;
+  return { pass: ok, detail: ok ? '' : 'regeneration differed after JSON round-trip' };
+});
+
 /* ---------------- test documentation ----------------
  * One entry per registered test, keyed by its exact name. Rendered under the
  * result row. The meta-test at the bottom fails if a test is missing here,
@@ -1745,6 +2145,30 @@ var TEST_DOCS = {
     'Five CLI warning paths in one sweep: missing --cfg, -m with server-only, -l in STL mode, non-hex client mask, and mutually exclusive server-only + client-mask.',
   'cfg warnings: thread collision, core excess, mixed modes, iface count, cross-wiring':
     'Five platform-config warning paths: latency thread colliding with data threads, more cores than threads, mixed MAC/IP port modes, interface/port_limit mismatch, and dest MACs that are not cross-wired.',
+  'EMU golden: ARP/ICMP/IGMP clients (simple_emu-like)':
+    'The baseline TRex-EMU profile (v0.19.0): 15 clients with incrementing MAC/IPv4/IPv6, ARP (timer) + ICMP defaults and an IGMP namespace plug carrying the router dmac - the shipped emu/simple_emu.py shape. Full-file golden (validated by compiling the generated Python) plus the verified EMU_CONSOLE.txt lines: trex-emu launch, trex-console --emu, load_profile with tunables, remove_profile.',
+  'EMU structure: DHCPv4 preset - clients start at 0.0.0.0 with class-id options':
+    'DHCPv4 emulation per emu/simple_dhcp.py: with static IPv4 off, clients must start at Ipv4(\'0.0.0.0\') (non-indexed .V()) and carry the dhcp plug with discover/request vendor class-id options.',
+  'EMU structure: DNS name-server database + mDNS init-json helpers':
+    'The generated helper methods: get_dns_init_json() with name_server=True and a grouped-by-domain A/AAAA record database (emu/simple_dns.py shape), get_mdns_init_json(client) with per-client formatted hostnames and domain_name (emu/simple_mdns.py shape), and the ipv6 ns-plug dmac wiring.',
+  'EMU warnings: bad MAC, DHCPv6 without ND, static IPv4 + DHCP, no plugins':
+    'Four warning paths: an invalid client MAC, DHCPv6 enabled without the IPv6 ND plugin it depends on, DHCPv4 alongside static addresses (clients should start at 0.0.0.0), and a profile with every plugin off.',
+  'EMU round-trip: model -> JSON -> parse -> regenerate identical':
+    'JSON round-trip guarantee for saved EMU .trexb.json models, over both generated files.',
+  'TPG golden: QinQ + Dot1Q tags JSON (tpg_tags_conf-like)':
+    'The Tagged Packet Group tags file (v0.19.0): one QinQ pair taking tag id 0, then Dot1Q VLANs 1-5 - the exact JSON shapes of the shipped stl/tpg_tags_conf.py and stl_tpg_stats.py. Full-file golden, parsed back as JSON to prove validity, and the totalTags count the UI displays.',
+  'TPG console: verified tpg_enable / tpg_stats / tpg_disable lines':
+    'The runbook commands were verified against v3.06 parsing_opts.py flag definitions: tpg_enable --ports/--num-tpgids/--tags, tpg_status, the STLTaggedPktGroup(tpgid=i) stream requirement, tpg_stats --port/--tpgid/--min-tag/--max-tag and tpg_disable.',
+  'TPG warnings: vlan range, duplicate vlans, empty tags, num-tpgids':
+    'Four warning paths: VLANs outside 1-4094, one VLAN appearing in two ranges (each may map to only one tag id), an empty tag list, and a non-positive num-tpgids.',
+  'BIRD golden: two BGP instances + generated static routes (bgp.conf-like)':
+    'The baseline BIRD config (v0.19.0): router id + device scan block, two IPv4 BGP peerings, and an 11-route generated static table - matching the shipped bird/cfg/bgp.conf and ipv4_routes.conf character-for-character in the protocol bodies. Full-file golden.',
+  'BIRD structure: OSPF/RIP blocks + IPv6 static + runbook console lines':
+    'The IGP shapes (ospf area/interface broadcast, rip multicast per the shipped configs), /24 route stepping (10.10.0.0 -> 10.10.1.0 -> 10.10.2.0, no overlap), an IPv6 static block, and the verified runbook: stack linux_based prerequisite, --bird-server launch, plugins load bird, add_node and set_config.',
+  'BIRD warnings: router id, AS bounds, duplicate names, route cap':
+    'Four warning paths: a non-dotted-quad router id, an out-of-range AS number, two BGP protocols sharing a name (BIRD rejects that), and a 6000-route request warning + capping the emitted table at exactly 5000 lines (bigger tables belong to server-side generation).',
+  'BIRD round-trip: model -> JSON -> parse -> regenerate identical':
+    'JSON round-trip guarantee for BIRD models - and the TPG fixture is round-tripped in the same test.',
   'docs: every registered test has a write-up on this page':
     'Meta-test: walks the registered test list and fails if any test name is missing from the documentation map that renders these descriptions - so a new test cannot land undocumented.'
 };
@@ -1774,7 +2198,10 @@ var TEST_SECTIONS = {
     blurb: 'IP and MAC mode goldens, NUMA/memory structure checks and misconfiguration warnings.' },
   'cli table: command lines per mode': {
     title: 'CLI builder & plain-English summaries',
-    blurb: 'Command assembly per mode, console snippets, and the "What this does" phrasing that is embedded in every generated file header.' }
+    blurb: 'Command assembly per mode, console snippets, and the "What this does" phrasing that is embedded in every generated file header.' },
+  'EMU golden: ARP/ICMP/IGMP clients (simple_emu-like)': {
+    title: 'New domains — EMU, TPG, BIRD (v0.19.0)',
+    blurb: 'The three subsystems beyond traffic profiles: TRex-EMU client emulation (goldens compiled with Python at authoring time), Tagged Packet Group per-VLAN rx stats, and BIRD routing configs - each with goldens, structural checks against the shipped v3.06 examples, warning sweeps and round-trips.' }
 };
 
 test('docs: every registered test has a write-up on this page', function () {

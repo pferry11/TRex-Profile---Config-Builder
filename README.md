@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.14.0** · Target: TRex v3.06
+**App version 0.19.0** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -12,7 +12,10 @@ interactive forms — no install, no build step, no backend required.
 | **STL Profile** | Stateless traffic profiles (`.py`) — packet layers, TX modes, field-engine variables, flow/latency stats, tunables |
 | **ASTF Profile** | Advanced stateful profiles (`.py`) — pcap replay lists or send/recv programs, CPS weights, TCP tuning, ramp-up |
 | **cap2 (STF)** | Legacy pcap-replay YAML profiles with `dyn_pyload` payload manipulation |
-| **Scenarios** | Guided wizards: two-server send/receive run, and low→mid→high connection ramp (profile + runbook bundles) |
+| **EMU** | TRex-EMU client-emulation profiles (`.py`) — ARP/ICMP/IGMP/IPv6 ND/DHCPv4-v6/DNS/mDNS plugins + launch runbook |
+| **TPG** | Tagged Packet Group tags file (`_tpg_tags.json`) for per-VLAN rx stats, with the `tpg_enable`/`tpg_stats` console runbook |
+| **BIRD** | BIRD routing configs (`bird_*.conf`) — BGP/OSPF/RIP + generated static-route tables, with the veth-node console runbook |
+| **Scenarios** | Guided wizards: connectivity check, two-server send/receive, N-stage connection ramp, NDR benchmark (profile + runbook bundles) |
 | **Platform Config** | `trex_cfg.yaml` from the server registry (PCI, cores, MACs/IPs, NUMA) |
 | **CLI Builder** | `t-rex-64` launch scripts + matching `trex-console` command blocks |
 | **Settings** | Server registry and app defaults; workspace export/import as one JSON file |
@@ -44,7 +47,7 @@ pcaps under `TREX_DIR`) and STL/ASTF outputs gain **Validate on server**
 ## Tests
 
 Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (48 tests). No toolchain needed.
+generators (79 tests). No toolchain needed.
 
 ## Notes
 

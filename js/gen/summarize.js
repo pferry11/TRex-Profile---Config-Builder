@@ -298,12 +298,94 @@
     return lines;
   }
 
+  /* ---------------- emu ---------------- */
+
+  function emu(model) {
+    var lines = [];
+    var c = model.clients || {};
+    var p = model.plugins || {};
+    var nsCount = model.nsCount || 1;
+    var addr = [];
+    addr.push('MACs from ' + (c.mac || '?'));
+    if (c.ipv4Enabled) { addr.push('IPv4 from ' + (c.ipv4 || '?') + ' via gateway ' + (c.dg || '?')); }
+    else if (p.dhcpv4 && p.dhcpv4.enabled) { addr.push('IPv4 leased over DHCP'); }
+    if (c.ipv6Enabled) { addr.push('IPv6 from ' + (c.ipv6 || '?')); }
+    lines.push('Emulates ' + n(c.count || 0, 'client') + ' in each of ' + n(nsCount, 'namespace') +
+      (model.vlan && model.vlan.enabled ? ' (802.1Q tag ' + model.vlan.tci + ' + vport per namespace)' : '') +
+      ': ' + addr.join(', ') + '.');
+    var plugNames = [];
+    if (p.arp && p.arp.enabled) { plugNames.push('ARP' + (p.arp.timer ? ' (timer ' + p.arp.timer + ' s)' : '')); }
+    if (p.icmp && p.icmp.enabled) { plugNames.push('ICMP'); }
+    if (p.igmp && p.igmp.enabled) { plugNames.push('IGMP'); }
+    if (p.ipv6nd && p.ipv6nd.enabled) { plugNames.push('IPv6 ND'); }
+    if (p.dhcpv4 && p.dhcpv4.enabled) { plugNames.push('DHCPv4'); }
+    if (p.dhcpv6 && p.dhcpv6.enabled) { plugNames.push('DHCPv6'); }
+    if (p.mdns && p.mdns.enabled) { plugNames.push('mDNS'); }
+    if (plugNames.length) { lines.push('Plugins: ' + plugNames.join(', ') + '.'); }
+    if (p.dns && p.dns.enabled) {
+      lines.push(p.dns.mode === 'server'
+        ? 'Each client is a DNS name server answering from a database of ' + n((p.dns.records || []).length, 'record') + '.'
+        : 'Clients resolve names against the DNS server at ' + (p.dns.serverIp || '?') + '.');
+    }
+    lines.push('Load from trex-console --emu: load_profile -f <file> -t --ns ' + nsCount +
+      ' --clients ' + (c.count || 0) + '.');
+    return lines;
+  }
+
+  /* ---------------- tpg ---------------- */
+
+  function tpg(model) {
+    var lines = [];
+    var qinq = (model.qinq || []).length;
+    var dot1q = 0;
+    (model.dot1q || []).forEach(function (d) {
+      if (d.minVlan !== null && d.maxVlan !== null && d.minVlan <= d.maxVlan) { dot1q += d.maxVlan - d.minVlan + 1; }
+    });
+    lines.push('Tagged Packet Group config with ' + n(qinq + dot1q, 'tag') +
+      (qinq ? ' (' + n(qinq, 'QinQ pair') + ' first, then ' + dot1q + ' Dot1Q)' : ' (all Dot1Q)') +
+      '; rx stats are counted per tag on ports ' + (model.ports || '0 1') + '.');
+    (model.dot1q || []).forEach(function (d) {
+      lines.push('Dot1Q VLANs ' + d.minVlan + '-' + d.maxVlan + ' map to consecutive tag ids.');
+    });
+    lines.push('Streams must carry flow_stats=STLTaggedPktGroup(tpgid=i) with i < ' + (model.numTpgids || 1) + '.');
+    return lines;
+  }
+
+  /* ---------------- bird ---------------- */
+
+  function bird(model) {
+    var lines = [];
+    var parts = [];
+    (model.bgp || []).forEach(function (b) {
+      parts.push('BGP ' + (b.name || '?') + ' (' + (b.ipv6 ? 'IPv6' : 'IPv4') + '): AS ' + b.localAs + ' at ' +
+        (b.localIp || '?') + ' peering with AS ' + b.neighborAs + ' at ' + (b.neighborIp || '?'));
+    });
+    if (model.ospf && model.ospf.enabled) { parts.push('OSPF area ' + (model.ospf.area || 0) + ' on all interfaces'); }
+    if (model.rip && model.rip.enabled) { parts.push('RIP on all interfaces'); }
+    lines.push('BIRD config (router id ' + (model.routerId || '?') + ')' +
+      (parts.length ? ': ' + parts.join('; ') + '.' : ' with no routing protocols.'));
+    (model.staticRoutes || []).forEach(function (r) {
+      if (r.ipv6) {
+        lines.push('Advertises the IPv6 route ' + (r.prefix || '?') + '/' + r.prefixLen + ' via ' + (r.nextHop || '?') + '.');
+      } else {
+        lines.push('Advertises ' + n(r.count || 1, 'static route') + ' from ' + (r.prefix || '?') + '/' + r.prefixLen +
+          ' via ' + (r.nextHop || '?') + '.');
+      }
+    });
+    var node = model.node || {};
+    lines.push('The runbook creates a bird veth node on port ' + (node.port || 0) + ' (' + (node.ipv4 || '?') + '/' +
+      (node.ipv4Subnet || 24) + ') and pushes the config over the console bird plugin.');
+    return lines;
+  }
+
   /* ---------------- registry + dispatcher ---------------- */
 
   TB.gen.registry['3.06'] = TB.gen.registry['3.06'] || {};
-  TB.gen.registry['3.06'].summarize = { stl: stl, astf: astf, cap2: cap2, cfg: cfg, cli: cli };
+  TB.gen.registry['3.06'].summarize = { stl: stl, astf: astf, cap2: cap2, cfg: cfg, cli: cli,
+                                        emu: emu, tpg: tpg, bird: bird };
 
-  var KIND_MAP = { stl: 'stl', astf: 'astf', cap2: 'cap2', server: 'cfg', cli: 'cli' };
+  var KIND_MAP = { stl: 'stl', astf: 'astf', cap2: 'cap2', server: 'cfg', cli: 'cli',
+                   emu: 'emu', tpg: 'tpg', bird: 'bird' };
 
   TB.gen.summary = function (model) {
     if (!model || !model.kind) { return []; }

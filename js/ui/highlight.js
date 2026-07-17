@@ -31,6 +31,12 @@
         '|(#[^\\n]*)' +                                            // 2 comment
         '|(\\s--?[\\w-]+)', 'g'),                                  // 3 flag
       classes: ['str', 'com', 'kw']
+    },
+    json: {
+      re: new RegExp(
+        '("(?:[^"\\\\\\n]|\\\\.)*")' +                             // 1 string
+        '|\\b(\\d+(?:\\.\\d+)?|true|false|null)\\b', 'g'),         // 2 number/literal
+      classes: ['str', 'num']
     }
   };
 
