@@ -50,6 +50,56 @@
         return name.replace(/[^\w.-]+/g, '_') + '.trexb.json';
       }
 
+      /* Default publish host = the active server's mgmt host, if any. */
+      function activeMgmtHost() {
+        try {
+          var s = TB.settings.get();
+          var id = s.defaults.activeServerId;
+          var srv = null;
+          s.servers.forEach(function (x) { if (x.id === id) { srv = x; } });
+          return (srv && srv.mgmtHost) ? srv.mgmtHost : '';
+        } catch (e) { return ''; }
+      }
+
+      function openPublishModal(f) {
+        var fileName = TB.publish.profileFileName((model.meta && model.meta.name) || f.name);
+        var hostInput = el('input', { type: 'text', value: activeMgmtHost(), placeholder: 'host or IP', width: '160px' });
+        hostInput.style.width = '160px';
+        var portInput = el('input', { type: 'text', value: '8000' });
+        portInput.style.width = '70px';
+        var resultEl = el('div', { class: 'validate-area' });
+        var publishBtn = el('button', { class: 'btn btn-generate', text: 'Publish' });
+
+        var body = el('div', {}, [
+          el('p', { class: 'field-hint',
+            text: 'Sends ' + fileName + ' to a running TRex-Backend (POST /profiles/upload). '
+              + 'It then appears in that box’s dashboard, allowlisted, with its summary.' }),
+          el('div', { class: 'field-row' }, [
+            el('label', { class: 'field' }, [el('span', { class: 'field-label', text: 'Backend host' }), hostInput]),
+            el('label', { class: 'field' }, [el('span', { class: 'field-label', text: 'Port' }), portInput]),
+            el('label', { class: 'field' }, [el('span', { class: 'field-label', text: ' ' }), publishBtn])
+          ]),
+          resultEl
+        ]);
+        var m = TB.ui.modal('Publish "' + fileName + '"', body);
+
+        publishBtn.onclick = function () {
+          var base = TB.publish.targetUrl(hostInput.value, portInput.value);
+          if (!base) { resultEl.innerHTML = ''; resultEl.appendChild(el('div', { class: 'validate-result err', text: 'Enter a backend host.' })); return; }
+          resultEl.innerHTML = '';
+          resultEl.appendChild(el('div', { class: 'field-hint', text: 'publishing to ' + base + '…' }));
+          TB.publish.send(base, fileName, f.content).then(function (res) {
+            resultEl.innerHTML = '';
+            resultEl.appendChild(el('div', { class: 'validate-result ok',
+              text: (res.overwrote ? 'Updated ' : 'Published ') + res.name + ' → dashboard dropdown on ' + base }));
+            TB.ui.toast('Published ' + res.name + ' to ' + base, 'ok');
+          }).catch(function (e) {
+            resultEl.innerHTML = '';
+            resultEl.appendChild(el('div', { class: 'validate-result err', text: 'Publish failed: ' + e.message }));
+          });
+        };
+      }
+
       function renderActive() {
         var f = result.files[activeIdx];
         codeEl.innerHTML = TB.ui.highlight(f.content, f.language);
@@ -94,6 +144,16 @@
               TB.util.downloadBinary(bundleBase + '_bundle.zip', TB.zip.build(items), 'application/zip');
               TB.ui.toast('Bundled ' + items.length + ' files into ' + bundleBase + '_bundle.zip', 'ok');
             }
+          }));
+        }
+
+        /* publish an STL profile straight to a running TRex-Backend control box */
+        if (TB.publish && model && model.kind === 'stl' && /\.py$/.test(f.name)) {
+          actionsEl.appendChild(el('button', {
+            class: 'btn btn-secondary',
+            text: 'Publish to server',
+            title: 'Push this profile to a running TRex-Backend so it appears in the dashboard',
+            onclick: function () { openPublishModal(f); }
           }));
         }
 

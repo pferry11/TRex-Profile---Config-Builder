@@ -136,6 +136,12 @@
         'file plus the model JSON into one zip per test (profile + runbook + launch script from a scenario, for ' +
         'example). Profiles also <strong>Save</strong> into the browser (IndexedDB, so big pcap-heavy workspaces fit); use ' +
         '<strong>Export workspace</strong> in the header for a durable backup of everything.</p>' +
+        '<p>STL profiles also offer <strong>Publish to server</strong>: enter a running ' +
+        '<a href="https://github.com/pferry11/TRex-Backend">TRex-Backend</a> host (prefilled from the active server’s ' +
+        'mgmt host) and the profile is POSTed to it. It lands in that box’s vetted-profiles directory and immediately ' +
+        'appears in the dashboard’s profile dropdown - allowlisted and showing this same summary - so a teammate can ' +
+        'run it without ever opening the builder. The backend can refuse uploads (<code>allow_upload: false</code>) on ' +
+        'boxes where an admin curates profiles by hand.</p>' +
         '<h4>Undo / redo</h4>' +
         '<p>Every profile builder\'s top bar carries <strong>↶ Undo / ↷ Redo</strong> buttons that step through ' +
         'model snapshots - one per settled edit, up to 50 deep per builder tab. Snapshots cover everything in the ' +
@@ -426,7 +432,7 @@
         ['New domain', 'BIRD routing configs', 'TRex ships a BIRD integration (BGP/OSPF/RIP, millions of routes); a config builder would suit routed DUT tests.', 'Large', 'done'],
         ['App platform', 'Adjustable text size', 'Settings -> Text size: a global scale plus per-group sliders (field names, controls, generated output, manual) - applied live via CSS variables, saved with the workspace.', 'Small', 'done'],
         ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small', 'done'],
-        ['App platform', 'Live TRex control', 'Extend the Flask backend to the TRex automation API: push a profile, start/stop, live stats - the app becomes a controller, not just a generator.', 'Large', 'planned'],
+        ['App platform', 'Publish to server (control seam)', 'Push a generated STL profile straight to a running TRex-Backend (Publish to server, output pane); it lands allowlisted in that box’s dashboard with its summary. Live control itself lives in the separate TRex-Backend/dashboard, kept small on purpose.', 'Medium', 'done'],
         ['App platform', 'Import existing .py profiles', 'Parse shipped/hand-written profiles back into editable models. Python parsing in JS is genuinely hard - realistic only for app-generated files.', 'Large', 'planned'],
         ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small', 'done'],
         ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium', 'done'],

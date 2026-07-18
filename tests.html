@@ -54,6 +54,7 @@
 
 <script src="js/core/util.js"></script>
 <script src="js/core/zip.js"></script>
+<script src="js/core/publish.js"></script>
 <script src="js/core/history.js"></script>
 <script src="js/core/store.js"></script>
 <script src="js/core/persist.js"></script>
@@ -2100,6 +2101,23 @@ test('persist: IndexedDB backing store, write-through cache round-trip', functio
   });
 });
 
+test('publish: target URL + profile filename builders', function () {
+  var fails = [];
+  var u = TB.publish.targetUrl;
+  if (u('10.0.0.26') !== 'http://10.0.0.26:8000') { fails.push('bare-host'); }
+  if (u('10.0.0.26', '9000') !== 'http://10.0.0.26:9000') { fails.push('host-port'); }
+  if (u('10.0.0.26:8123') !== 'http://10.0.0.26:8123') { fails.push('host-with-port'); }
+  if (u('https://box.lab/') !== 'https://box.lab:8000') { fails.push('scheme-trailing-slash'); }
+  if (u('') !== null || u('   ') !== null) { fails.push('blank'); }
+
+  var n = TB.publish.profileFileName;
+  if (n('my profile') !== 'my_profile.py') { fails.push('spaces(' + n('my profile') + ')'); }
+  if (n('imix_like.py') !== 'imix_like.py') { fails.push('already-py'); }
+  if (n('a/b/../c.py') !== 'a_b_.._c.py') { fails.push('path-chars(' + n('a/b/../c.py') + ')'); }
+  if (n('') !== 'profile.py') { fails.push('empty'); }
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
 test('history: record/dedupe, undo/redo walk, branch truncation, depth limit', function () {
   var fails = [];
   var h = TB.history.create({ limit: 5 });
@@ -2180,6 +2198,8 @@ test('zip: entries extract back to the original contents (incl. UTF-8)', functio
  * result row. The meta-test at the bottom fails if a test is missing here,
  * so new tests cannot land undocumented. */
 var TEST_DOCS = {
+  'publish: target URL + profile filename builders':
+    'The publish-to-server seam (Publish to server button): targetUrl normalises a host (bare, with port, with scheme, blank) into the TRex-Backend base URL, and profileFileName sanitises a profile name to the safe .py basename the backend accepts - so the builder shows the final name and never sends a path. The fetch itself is verified live against a running TRex-Backend, not here.',
   'history: record/dedupe, undo/redo walk, branch truncation, depth limit':
     'The undo/redo engine behind every builder\'s topbar: recording an unchanged model must not create an entry (each settled edit lands exactly once), undo/redo must walk the stack and stop cleanly at both ends, editing after an undo must discard the redo branch (standard editor semantics), the stack must cap at its limit by dropping the oldest snapshots, and returned models must be independent clones - mutating one must not corrupt the history.',
   'persist: IndexedDB backing store, write-through cache round-trip':
