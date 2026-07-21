@@ -266,7 +266,7 @@
         var box = el('div', {});
         var r1 = el('div', { class: 'field-row' });
         r1.appendChild(field({ label: 'Distribution', tip: TB.help.astf.distribution, type: 'select', value: g.distribution,
-          options: [{ value: 'seq' }, { value: 'rand' }],
+          options: [{ value: 'seq' }, { value: 'random' }, { value: 'normal' }],
           onChange: function (v) { g.distribution = v; regen(); } }));
         [['clientsStart', 'Clients start'], ['clientsEnd', 'Clients end'],
          ['serversStart', 'Servers start'], ['serversEnd', 'Servers end']].forEach(function (p) {
@@ -311,7 +311,7 @@
           row.appendChild(field({ label: 'name', tip: TB.help.cap2.poolName, type: 'text', value: p.name, width: '60px',
             onChange: function (v) { p.name = v || ''; renderEditor(); regen(); } }));
           row.appendChild(field({ label: 'distribution', type: 'select', value: p.distribution,
-            options: [{ value: 'seq' }, { value: 'rand' }],
+            options: [{ value: 'seq' }, { value: 'random' }, { value: 'normal' }],
             onChange: function (v) { p.distribution = v; regen(); } }));
           row.appendChild(field({ label: 'ip_start', type: 'text', value: p.ipStart, width: '105px',
             validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },

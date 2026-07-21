@@ -1500,6 +1500,26 @@ test('cap2 generator pools: named client/server pools + track_ports + per-templa
   return { pass: warned, detail: warned ? '' : 'no warning for undefined pool reference' };
 });
 
+test('cap2 distribution: emits TRex-valid "random"/"normal" (never "rand"), round-trips', function () {
+  var m = cap2Model('dist');
+  m.generator.distribution = 'random';
+  m.generator.clientPools = [{ name: 'c1', distribution: 'normal', ipStart: '26.0.0.1', ipEnd: '26.0.1.255' }];
+  m.generator.serverPools = [{ name: 's1', distribution: 'random', ipStart: '28.0.0.1', ipEnd: '28.0.1.255', trackPorts: false }];
+  var out = c2gen(m, NOW).files[0].content;
+  if (/"rand"/.test(out)) { return { pass: false, detail: 'emitted the invalid value "rand" - TRex expects "random"' }; }
+  var needs = ['distribution : "normal"', 'distribution : "random"'];
+  for (var i = 0; i < needs.length; i++) {
+    if (out.indexOf(needs[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(needs[i]) }; }
+  }
+  var res = TB.imp.parse(out, { kind: 'cap2' });
+  var ok = res.ok && res.coverage === 1 && res.model.generator.distribution === 'random' &&
+    res.model.generator.clientPools[0].distribution === 'normal' &&
+    res.model.generator.serverPools[0].distribution === 'random';
+  return { pass: ok, detail: ok ? '' : 'round-trip dist: ' + JSON.stringify({ g: res.model.generator.distribution,
+    c: res.model.generator.clientPools && res.model.generator.clientPools[0].distribution,
+    s: res.model.generator.serverPools && res.model.generator.serverPools[0].distribution }) };
+});
+
 /* ================= trex_cfg.yaml suite ================= */
 var cgen = TB.gen.resolve('3.06', 'cfg');
 var CFGNOW = { now: '2026-07-06', trexVersion: '3.06' };
@@ -2460,6 +2480,8 @@ var TEST_DOCS = {
     'The v0.23.0 cap2 import-fidelity fields, ranked from the 67-file coverage run: the global source-mac array and the per-template one_app_server/server_addr (single-server mode, per dns_one_server/lb_ex1/sfr). The generator emits mac : [..] and per-cap server_addr/one_app_server, and re-import recovers all three at 100% coverage - so the shipped AVL/sfr benchmark profiles now round-trip losslessly instead of silently dropping those lines on regenerate.',
   'cap2 Tier 2: ipv6 base, timer-wheel and min/max ip overrides generate and re-import':
     'The v0.24.0 cap2 import-fidelity fields (global): src_ipv6/dst_ipv6 6-word base arrays (ipv6.yaml), the min/max_src/dst_ip hex overrides (rtsp_full1/sfr_agg) and the nested timer-wheel tw block buckets/levels/bucket_time_usec (dns_tw.yaml). Generator emits all three shapes and re-import recovers them at 100% coverage - taking shipped cap2 import coverage to 61/67 files fully (the remaining 6 are the per-template generator-pools files, the deferred large item).',
+  'cap2 distribution: emits TRex-valid "random"/"normal" (never "rand"), round-trips':
+    'Guards a correctness fix: every shipped v3.06 cap2/avl file uses "seq" or "random" for the tuple-generator distribution (TRex also accepts "normal") - never "rand", which the builder used to emit for the non-seq option. The generator now emits the verbatim value for the top-level generator and for each named pool, the negative check asserts "rand" never appears, and re-import recovers "random"/"normal" - so a user picking the non-seq option gets a profile TRex actually accepts, and shipped files with "random" round-trip.',
   'cap2 generator pools: named client/server pools + track_ports + per-template client_pool/server_pool':
     'The v0.25.0 structural item that closes cap2 import fidelity: named generator pools (generator_clients/generator_servers, each pool a distribution + ip_start/ip_end sub-range, server pools also carrying track_ports) and the per-template client_pool/server_pool refs that pin a pcap template to a pool instead of the global range - the model used by the shipped per_template_gen*/many_client_example profiles. The generator emits the nested pool lists and per-cap refs, re-import rebuilds the pool arrays and cap references at 100% coverage, and a template pointing at an undefined pool raises a warning. This is the last of the 6 <60% files: shipped cap2 import coverage is now the full 67/67 at 100%.',
   'cfg golden: IP mode (simple_cfg-like)':
