@@ -130,16 +130,20 @@
         '<code>TREX_DIR=/opt/trex/v3.06 python app.py</code>. This unlocks the <em>Browse…</em> buttons on pcap ' +
         'fields (lists real pcaps on the box) and <em>Validate on server</em> (runs stl-sim/astf-sim and shows the result).</li></ul>' +
         '<h4>The output actions</h4>' +
-        '<p>Every generated artifact offers <strong>Copy</strong>, <strong>Download</strong> (the .py/.yaml file itself), ' +
-        '<strong>Download model</strong> - a JSON file that re-imports into the builder later, so you can keep editing ' +
-        'a profile long after it was made - and <strong>Download bundle (.zip)</strong>, which packs every generated ' +
-        'file plus the model JSON into one zip per test (profile + runbook + launch script from a scenario, for ' +
-        'example). Profiles also <strong>Save</strong> into the browser (IndexedDB, so big pcap-heavy workspaces fit); use ' +
-        '<strong>Export workspace</strong> in the header for a durable backup of everything.</p>' +
+        '<p>Every generated artifact offers <strong>Copy</strong>, <strong>Download</strong> (the .py/.yaml <em>profile</em> ' +
+        'itself - the file TRex runs), <strong>Save builder file (.json)</strong> - this app\'s own save format, which ' +
+        'reopens for an exact restore of the builder session - and <strong>Download bundle (.zip)</strong>, which packs ' +
+        'every generated file plus the builder file into one zip per test (profile + runbook + launch script from a ' +
+        'scenario, for example). Profiles also <strong>Save</strong> into the browser (IndexedDB, so big pcap-heavy ' +
+        'workspaces fit); use <strong>Export workspace</strong> in the header for a durable backup of everything.</p>' +
+        '<p><em>Two file kinds, kept distinct:</em> a <strong>profile</strong> (<code>.yaml</code>/<code>.py</code>) is ' +
+        'the artifact TRex runs; a <strong>builder file</strong> (<code>.trexb.json</code>) is this app\'s own save format. ' +
+        'That is why re-opening is split into two labelled actions rather than one button that guesses.</p>' +
         '<h4>Re-editing a generated profile</h4>' +
-        '<p>You don\'t have to keep the model JSON to edit a profile again - the profile file itself is enough. On the ' +
-        '<strong>cap2</strong> tab, <strong>Import…</strong> accepts a generated <code>.yaml</code> as well as a ' +
-        '<code>.json</code> model. The <em>values are read straight from the file body</em>, so any edit you made - a ' +
+        '<p>You don\'t have to keep the builder file to edit a profile again - the profile itself is enough. On the ' +
+        '<strong>cap2</strong> tab the output pane offers <strong>Open profile…</strong> (a <code>.yaml</code>) and ' +
+        '<strong>Open builder file…</strong> (a <code>.json</code>) as separate actions. For a profile, the ' +
+        '<em>values are read straight from the file body</em>, so any edit you made - a ' +
         'changed IP, a different rate - comes right back in (the body is the single source of truth; there is no hidden ' +
         'copy to fall out of sync). A one-line tag at the foot of the file (<code># trexb: cap2 schemaVersion=1</code>) ' +
         'just marks it as ours and names the field map to use; it holds no values. A file this tool generated maps fully; ' +
@@ -455,7 +459,7 @@
         ['App platform', 'Re-import .py profiles (STL/ASTF)', 'Extend the same body-is-truth re-edit seam to the Python builders. The tag scheme and coverage report are shared and proven (cap2); the remaining work is per-field readers ("codecs") that locate each value in the generated Python and segmentation of repeated blocks (streams / templates) - genuinely hard for arbitrary Python, realistic only for app-generated layout, with a structural fingerprint for parse-confidence as a possible aid.', 'Large', 'in-progress'],
         ['cap2 builder', 'Common cap2 import fields (mac, single-server)', 'The high-frequency fields real v3.06 cap2 profiles use: the global source mac array, and per-template one_app_server + server_addr (single-server mode, per dns_one_server/lb_ex1/sfr). Ranked from a 67-file import-coverage run; adding them took shipped cap2 imports from 44/67 to 54/67 at 100% and made the AVL/sfr benchmark profiles regenerate losslessly.', 'Small', 'done'],
         ['cap2 builder', 'cap2 IPv6 base + timer-wheel + min/max IP overrides', 'src_ipv6/dst_ipv6 base addresses (ipv6*.yaml), the timer-wheel tw block (buckets/levels/bucket_time_usec, dns_tw.yaml), and the min/max_src/dst_ip hex overrides (rtsp/sfr_agg) - all global fields. Took shipped cap2 import coverage from 54 to 61 of 67 files at 100%.', 'Medium', 'done'],
-        ['cap2 builder', 'Per-template generator pools', 'Named client/server pools (generator_clients/generator_servers, per-template client_pool/server_pool and their track_ports flag) used by per_template_gen*/many_client_example - a richer generator model than the single client/server range. The only real <60% importers in the 67-file run.', 'Large', 'planned'],
+        ['cap2 builder', 'Per-template generator pools', 'Named client/server pools (generator_clients/generator_servers, per-template client_pool/server_pool and their track_ports flag) used by per_template_gen*/many_client_example - a richer generator model than the single client/server range. Adding them took shipped cap2 import coverage from 61/67 to the full 67/67 files at 100%, so every shipped v3.06 cap2/avl profile now round-trips losslessly.', 'Large', 'done'],
         ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small', 'done'],
         ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium', 'done'],
         ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small', 'done']

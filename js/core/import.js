@@ -85,7 +85,8 @@
 
   function cap2Cap(name) {
     return { name: name, cps: 1, ipg: 10000, rtt: 10000, w: 1,
-             limit: null, plugin_id: null, oneAppServer: null, serverAddr: null, dynPyload: null };
+             limit: null, plugin_id: null, oneAppServer: null, serverAddr: null,
+             clientPool: null, serverPool: null, dynPyload: null };
   }
 
   /* "[0x0,0x0,0x0,0x1,0x0,0x00]" -> [0,0,0,1,0,0], or null if not a numeric list.
@@ -104,7 +105,8 @@
       duration: 10,
       generator: { distribution: 'seq', clientsStart: '', clientsEnd: '',
                    serversStart: '', serversEnd: '', clientsPerGb: null, minClients: null,
-                   dualPortMask: null, tcpAging: null, udpAging: null },
+                   dualPortMask: null, tcpAging: null, udpAging: null,
+                   clientPools: null, serverPools: null },
       flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
                vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null,
                srcIpv6: null, dstIpv6: null, tw: null,
@@ -112,8 +114,8 @@
       capInfo: []
     };
     var mapped = 0, total = 0, unmapped = [];
-    var section = null;   // null | 'generator' | 'cap_info'
-    var cap = null, dyn = null, inDyn = false;
+    var section = null;   // null | 'generator' | 'gen_clients' | 'gen_servers' | 'cap_info'
+    var cap = null, dyn = null, inDyn = false, pool = null;
 
     String(text).split(/\r?\n/).forEach(function (raw) {
       var t = raw.trim();
@@ -125,7 +127,9 @@
 
       /* structural section headers - not counted as settings */
       if (key === 'generator' && val === '') { section = 'generator'; inDyn = false; return; }
-      if (key === 'cap_info' && val === '') { section = 'cap_info'; inDyn = false; return; }
+      if (key === 'generator_clients' && val === '') { section = 'gen_clients'; pool = null; return; }
+      if (key === 'generator_servers' && val === '') { section = 'gen_servers'; pool = null; return; }
+      if (key === 'cap_info' && val === '') { section = 'cap_info'; inDyn = false; pool = null; return; }
       if (key === 'dyn_pyload' && val === '') {
         if (cap) { cap.dynPyload = []; inDyn = true; } return;
       }
@@ -172,6 +176,26 @@
         mapped++; total++; return;
       }
 
+      /* per-template generator pools (generator_clients / generator_servers).
+         Each "- name : .." opens a pool item; its distribution/ip_start/ip_end
+         (+ track_ports for servers) follow at deeper indent. */
+      if (section === 'gen_clients' || section === 'gen_servers') {
+        var arrKey = section === 'gen_clients' ? 'clientPools' : 'serverPools';
+        if (key === 'name') {
+          pool = { name: String(pv(val)), distribution: 'seq', ipStart: '', ipEnd: '' };
+          if (section === 'gen_servers') { pool.trackPorts = false; }
+          if (!model.generator[arrKey]) { model.generator[arrKey] = []; }
+          model.generator[arrKey].push(pool);
+          mapped++; total++; return;
+        }
+        if (pool) {
+          if (key === 'distribution') { pool.distribution = String(pv(val)); mapped++; total++; return; }
+          if (key === 'ip_start') { pool.ipStart = String(pv(val)); mapped++; total++; return; }
+          if (key === 'ip_end') { pool.ipEnd = String(pv(val)); mapped++; total++; return; }
+          if (key === 'track_ports') { pool.trackPorts = /^(true|1)$/i.test(val); mapped++; total++; return; }
+        }
+      }
+
       /* cap_info entries */
       if (section === 'cap_info') {
         if (key === 'name') { cap = cap2Cap(pv(val)); model.capInfo.push(cap); inDyn = false; mapped++; total++; return; }
@@ -181,6 +205,8 @@
         }
         if (cap && key === 'server_addr') { cap.serverAddr = String(pv(val)); mapped++; total++; return; }
         if (cap && key === 'one_app_server') { cap.oneAppServer = /^(true|1)$/i.test(val); mapped++; total++; return; }
+        if (cap && key === 'client_pool') { cap.clientPool = String(pv(val)); mapped++; total++; return; }
+        if (cap && key === 'server_pool') { cap.serverPool = String(pv(val)); mapped++; total++; return; }
         if (cap && CAP2_CAP.hasOwnProperty(key)) { cap[key] = pv(val); mapped++; total++; return; }
       }
 

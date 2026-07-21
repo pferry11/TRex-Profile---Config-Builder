@@ -1,20 +1,45 @@
 /* TRex Profile & Config Builder - output pane: warnings banner, file tabs,
- * highlighted code, and the three standard actions
- * (Copy / Download artifact / Download model). */
+ * highlighted code, and the standard actions
+ * (Copy / Download profile / Save builder file / Download bundle, and - when the
+ *  builder passes the callbacks - inline Open profile / Open builder file). */
 (function (root) {
   'use strict';
   var TB = root.TB = root.TB || {};
   TB.ui = TB.ui || {};
 
   TB.ui.output = {
-    /* render(container, { result, model })
+    /* render(container, { result, model, onOpenProfile?, onOpenBuilderFile? })
      * result: { files: [{name, language, content}], warnings: [] }
-     * model:  the source model (for the "Download model" action). */
+     * model:  the source model (for the "Save builder file" action).
+     * onOpenProfile(text, filename):     if set, shows an inline "Open profile…"
+     *   action that reads a TRex profile file (.yaml/.py) back into the builder.
+     *   profileAccept overrides its file filter (default '.yaml,.yml,.py').
+     * onOpenBuilderFile(text, filename): if set, shows an inline "Open builder
+     *   file…" action that restores a builder file (.json) saved by this app.
+     * These two are distinct operations - a profile is parsed best-effort from
+     * its body, a builder file is an exact restore - hence two labelled actions. */
     render: function (container, opts) {
       var el = TB.ui.el;
       container.innerHTML = '';
       var result = opts.result;
       var model = opts.model;
+
+      /* transient hidden <input type=file> -> text; used by the Open actions */
+      function pickTextFile(accept, cb) {
+        var inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = accept; inp.style.display = 'none';
+        document.body.appendChild(inp);
+        inp.addEventListener('change', function () {
+          var file = inp.files[0];
+          if (file) {
+            var reader = new FileReader();
+            reader.onload = function () { cb(String(reader.result), file.name); };
+            reader.readAsText(file);
+          }
+          if (inp.parentNode) { inp.parentNode.removeChild(inp); }
+        });
+        inp.click();
+      }
 
       if (!result || !result.files || !result.files.length) {
         container.appendChild(el('div', { class: 'output-empty', text: 'Nothing to generate yet.' }));
@@ -126,9 +151,28 @@
         if (model) {
           actionsEl.appendChild(el('button', {
             class: 'btn btn-secondary',
-            text: 'Download model',
-            title: 'Save the re-editable JSON model (' + modelFileName() + ')',
+            text: 'Save builder file (.json)',
+            title: 'Save the re-editable builder file (' + modelFileName() + ') - reopen it later with Open builder file… for an exact restore',
             onclick: function () { TB.util.downloadText(modelFileName(), JSON.stringify(model, null, 2)); }
+          }));
+        }
+        /* inline Open actions (only when the builder wires them up) - the two
+           file kinds are deliberately separate: a profile is parsed from its
+           body, a builder file is an exact restore. */
+        if (opts.onOpenProfile) {
+          actionsEl.appendChild(el('button', {
+            class: 'btn btn-secondary',
+            text: 'Open profile…',
+            title: 'Load a TRex profile file back into the builder - values are read from the file body, so hand-edits are honoured',
+            onclick: function () { pickTextFile(opts.profileAccept || '.yaml,.yml,.py', opts.onOpenProfile); }
+          }));
+        }
+        if (opts.onOpenBuilderFile) {
+          actionsEl.appendChild(el('button', {
+            class: 'btn btn-secondary',
+            text: 'Open builder file…',
+            title: 'Restore a builder file (.json) this app saved - an exact reload of the builder session',
+            onclick: function () { pickTextFile('.json,application/json', opts.onOpenBuilderFile); }
           }));
         }
         if (TB.zip && (result.files.length > 1 || model)) {
@@ -137,7 +181,7 @@
           actionsEl.appendChild(el('button', {
             class: 'btn btn-secondary',
             text: 'Download bundle (.zip)',
-            title: 'all generated files' + (model ? ' + the model JSON' : '') + ' in one zip',
+            title: 'all generated files' + (model ? ' + the builder file (.json)' : '') + ' in one zip',
             onclick: function () {
               var items = result.files.map(function (x) { return { name: x.name, content: x.content }; });
               if (model) { items.push({ name: modelFileName(), content: JSON.stringify(model, null, 2) }); }

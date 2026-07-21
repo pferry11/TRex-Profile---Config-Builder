@@ -1466,6 +1466,40 @@ test('cap2 Tier 2: ipv6 base, timer-wheel and min/max ip overrides generate and 
   return { pass: ok, detail: ok ? '' : 'round-trip: ' + JSON.stringify(f) };
 });
 
+test('cap2 generator pools: named client/server pools + track_ports + per-template client_pool/server_pool', function () {
+  var m = cap2Model('pools');
+  m.generator.clientPools = [
+    { name: 'c1', distribution: 'seq', ipStart: '26.0.0.1', ipEnd: '26.0.1.255' },
+    { name: 'c2', distribution: 'seq', ipStart: '36.0.0.1', ipEnd: '36.0.1.255' }];
+  m.generator.serverPools = [
+    { name: 's1', distribution: 'seq', ipStart: '28.0.0.1', ipEnd: '28.0.1.255', trackPorts: false },
+    { name: 's2', distribution: 'seq', ipStart: '38.0.0.1', ipEnd: '38.0.1.255', trackPorts: true }];
+  m.capInfo[0].clientPool = 'c2';
+  m.capInfo[0].serverPool = 's1';
+  var out = c2gen(m, NOW);
+  if (out.warnings.length) { return { pass: false, detail: 'unexpected warnings: ' + out.warnings.join(' | ') }; }
+  var c = out.files[0].content;
+  var needs = ['          generator_clients :', '              - name : "c1"',
+    '                ip_start : "26.0.0.1"', '                ip_end : "26.0.1.255"',
+    '          generator_servers :', '                track_ports : false', '                track_ports : true',
+    '       client_pool: "c2"', '       server_pool: "s1"'];
+  for (var i = 0; i < needs.length; i++) {
+    if (c.indexOf(needs[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(needs[i]) }; }
+  }
+  var res = TB.imp.parse(c, { kind: 'cap2' });
+  var gp = res.model.generator;
+  var ok = res.ok && res.coverage === 1 &&
+    gp.clientPools && gp.clientPools.length === 2 && gp.clientPools[0].name === 'c1' && gp.clientPools[1].ipStart === '36.0.0.1' &&
+    gp.serverPools && gp.serverPools.length === 2 && gp.serverPools[0].trackPorts === false && gp.serverPools[1].trackPorts === true &&
+    res.model.capInfo[0].clientPool === 'c2' && res.model.capInfo[0].serverPool === 's1';
+  if (!ok) { return { pass: false, detail: 'round-trip: ' + JSON.stringify({ cov: res.coverage, cp: gp.clientPools, sp: gp.serverPools,
+    capRefs: [res.model.capInfo[0].clientPool, res.model.capInfo[0].serverPool] }) }; }
+  /* a template referencing an undefined pool must warn */
+  m.capInfo[0].serverPool = 'nope';
+  var warned = c2gen(m).warnings.some(function (x) { return x.indexOf('server_pool "nope" is not a defined') !== -1; });
+  return { pass: warned, detail: warned ? '' : 'no warning for undefined pool reference' };
+});
+
 /* ================= trex_cfg.yaml suite ================= */
 var cgen = TB.gen.resolve('3.06', 'cfg');
 var CFGNOW = { now: '2026-07-06', trexVersion: '3.06' };
@@ -2426,6 +2460,8 @@ var TEST_DOCS = {
     'The v0.23.0 cap2 import-fidelity fields, ranked from the 67-file coverage run: the global source-mac array and the per-template one_app_server/server_addr (single-server mode, per dns_one_server/lb_ex1/sfr). The generator emits mac : [..] and per-cap server_addr/one_app_server, and re-import recovers all three at 100% coverage - so the shipped AVL/sfr benchmark profiles now round-trip losslessly instead of silently dropping those lines on regenerate.',
   'cap2 Tier 2: ipv6 base, timer-wheel and min/max ip overrides generate and re-import':
     'The v0.24.0 cap2 import-fidelity fields (global): src_ipv6/dst_ipv6 6-word base arrays (ipv6.yaml), the min/max_src/dst_ip hex overrides (rtsp_full1/sfr_agg) and the nested timer-wheel tw block buckets/levels/bucket_time_usec (dns_tw.yaml). Generator emits all three shapes and re-import recovers them at 100% coverage - taking shipped cap2 import coverage to 61/67 files fully (the remaining 6 are the per-template generator-pools files, the deferred large item).',
+  'cap2 generator pools: named client/server pools + track_ports + per-template client_pool/server_pool':
+    'The v0.25.0 structural item that closes cap2 import fidelity: named generator pools (generator_clients/generator_servers, each pool a distribution + ip_start/ip_end sub-range, server pools also carrying track_ports) and the per-template client_pool/server_pool refs that pin a pcap template to a pool instead of the global range - the model used by the shipped per_template_gen*/many_client_example profiles. The generator emits the nested pool lists and per-cap refs, re-import rebuilds the pool arrays and cap references at 100% coverage, and a template pointing at an undefined pool raises a warning. This is the last of the 6 <60% files: shipped cap2 import coverage is now the full 67/67 at 100%.',
   'cfg golden: IP mode (simple_cfg-like)':
     'The baseline trex_cfg.yaml in IP/gateway mode, matching the shipped cfg/simple_cfg.yaml. Full-file golden.',
   'cfg golden: MAC + platform (xl710-like)':

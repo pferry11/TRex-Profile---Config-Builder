@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.24.0** · Target: TRex v3.06
+**App version 0.25.0** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -71,7 +71,7 @@ pcaps under `TREX_DIR`) and STL/ASTF outputs gain **Validate on server**
 ## Tests
 
 Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (91 tests). No toolchain needed.
+generators (92 tests). No toolchain needed.
 
 ## Notes
 
@@ -86,6 +86,9 @@ generators (91 tests). No toolchain needed.
 - `node tools/cap2_import_coverage.js` measures how much of the shipped v3.06
   cap2 profiles the importer can map back into editable models (needs a local
   `v3.06/` tree) — the objective metric when closing cap2 import-fidelity gaps.
+  As of v0.25.0 all **67/67** shipped cap2/avl profiles round-trip at 100%,
+  including the per-template named generator pools (`generator_clients`/
+  `generator_servers`, per-template `client_pool`/`server_pool`, `track_ports`).
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is

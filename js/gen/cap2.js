@@ -43,10 +43,29 @@
     }
     if (!(model.duration > 0)) { w.push('duration must be greater than 0.'); }
 
+    /* generator pools: names must be unique per side and IP bounds valid */
+    var clientNames = {}, serverNames = {};
+    [['generator_clients', g.clientPools, clientNames], ['generator_servers', g.serverPools, serverNames]]
+      .forEach(function (spec) {
+        (spec[1] || []).forEach(function (p, i) {
+          var lbl = spec[0] + '[' + i + '] (' + (p.name || '?') + ')';
+          if (!p.name) { w.push(lbl + ': pool name is required (client_pool/server_pool reference it).'); }
+          else if (spec[2][p.name]) { w.push(lbl + ': duplicate pool name "' + p.name + '".'); }
+          else { spec[2][p.name] = 1; }
+          if (!TB.util.isIpv4(p.ipStart)) { w.push(lbl + ': ip_start "' + (p.ipStart || '') + '" is not a valid IPv4 address.'); }
+          if (!TB.util.isIpv4(p.ipEnd)) { w.push(lbl + ': ip_end "' + (p.ipEnd || '') + '" is not a valid IPv4 address.'); }
+          if (TB.util.isIpv4(p.ipStart) && TB.util.isIpv4(p.ipEnd) && ip2num(p.ipStart) > ip2num(p.ipEnd)) {
+            w.push(lbl + ': ip_start is above ip_end.');
+          }
+        });
+      });
+
     (model.capInfo || []).forEach(function (c, i) {
       var label = 'cap_info[' + i + '] (' + (c.name || '?') + ')';
       if (!(c.cps > 0)) { w.push(label + ': cps must be greater than 0.'); }
       if (!c.name) { w.push(label + ': pcap path is required.'); }
+      if (c.clientPool && !clientNames[c.clientPool]) { w.push(label + ': client_pool "' + c.clientPool + '" is not a defined generator_clients pool.'); }
+      if (c.serverPool && !serverNames[c.serverPool]) { w.push(label + ': server_pool "' + c.serverPool + '" is not a defined generator_servers pool.'); }
       if (c.plugin_id === 4 && c.name && c.name.toLowerCase().indexOf('http') === -1) {
         w.push(label + ': plugin_id 4 is the HTTP plugin but the pcap name does not mention http (hint only).');
       }
@@ -99,6 +118,26 @@
     if (set(g.tcpAging)) { body.push(GI + pad('tcp_aging', 14) + ' : ' + g.tcpAging); }
     if (set(g.udpAging)) { body.push(GI + pad('udp_aging', 14) + ' : ' + g.udpAging); }
 
+    /* Per-template generator pools: named client/server sub-ranges a cap_info
+       entry can pin its flows to via client_pool/server_pool. Nested lists under
+       the generator map, matching the shipped per_template_gen / many_client
+       files. Server pools additionally carry track_ports. */
+    var PI = GI + '    ';    // pool item dash  (14 spaces)
+    var PF = GI + '      ';  // pool item field (16 spaces)
+    function emitPools(header, pools, isServer) {
+      if (!pools || !pools.length) { return; }
+      body.push(GI + header + ' :');
+      pools.forEach(function (p) {
+        body.push(PI + '- name : "' + (p.name || '') + '"');
+        body.push(PF + 'distribution : "' + (p.distribution || 'seq') + '"');
+        body.push(PF + 'ip_start : "' + (p.ipStart || '') + '"');
+        body.push(PF + 'ip_end : "' + (p.ipEnd || '') + '"');
+        if (isServer) { body.push(PF + 'track_ports : ' + (p.trackPorts ? 'true' : 'false')); }
+      });
+    }
+    emitPools('generator_clients', g.clientPools, false);
+    emitPools('generator_servers', g.serverPools, true);
+
     if (f.capIpg === true) { body.push('  cap_ipg : true'); }
     if (set(f.capOverrideIpg)) { body.push('  cap_override_ipg : ' + f.capOverrideIpg); }
     if (set(f.capIpgMin)) { body.push('  cap_ipg_min : ' + f.capIpgMin); }
@@ -125,6 +164,8 @@
     body.push('  cap_info :');
     (model.capInfo || []).forEach(function (c) {
       body.push('     - name: ' + c.name);
+      if (set(c.clientPool)) { body.push('       client_pool: "' + c.clientPool + '"'); }
+      if (set(c.serverPool)) { body.push('       server_pool: "' + c.serverPool + '"'); }
       body.push('       ' + pad('cps', 3) + ' : ' + c.cps);
       body.push('       ' + pad('ipg', 3) + ' : ' + c.ipg);
       body.push('       ' + pad('rtt', 3) + ' : ' + c.rtt);

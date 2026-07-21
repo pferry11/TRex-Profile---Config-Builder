@@ -8,7 +8,8 @@
 
   function defaultCap() {
     return { name: 'cap2/dns.pcap', cps: 1.0, ipg: 10000, rtt: 10000, w: 1,
-             limit: null, plugin_id: null, oneAppServer: null, serverAddr: null, dynPyload: null };
+             limit: null, plugin_id: null, oneAppServer: null, serverAddr: null,
+             clientPool: null, serverPool: null, dynPyload: null };
   }
 
   /* source-mac base: model stores a 6-byte array; the UI edits colon-hex. */
@@ -35,6 +36,29 @@
     return out.every(function (n) { return isFinite(n) && n >= 0 && n <= 0xffff; }) ? out : null;
   }
 
+  /* min/max_src/dst_ip: TRex stores these as 32-bit hex (0x10000001), but every
+     value maps 1:1 to a dotted quad, so the UI shows/accepts dotted-decimal for
+     readability. The model keeps the hex form so emit/import round-trip byte for
+     byte. hexToIp displays canonical hex as an IPv4; anything else passes through
+     (e.g. a value still being typed). ipToHex normalises IPv4 *or* hex to 0x-hex. */
+  function hexToIp(hex) {
+    hex = String(hex || '');
+    if (!/^0x[0-9a-fA-F]+$/.test(hex)) { return hex; }
+    var n = parseInt(hex, 16) >>> 0;
+    return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+  }
+  function ipToHex(v) {
+    v = String(v || '').trim();
+    if (v === '') { return null; }
+    if (/^0x[0-9a-fA-F]+$/.test(v)) { return '0x' + ('00000000' + (parseInt(v, 16) >>> 0).toString(16)).slice(-8); }
+    if (TB.util.isIpv4(v)) {
+      var p = v.split('.');
+      var n = ((+p[0]) << 24 >>> 0) + ((+p[1]) << 16) + ((+p[2]) << 8) + (+p[3]);
+      return '0x' + ('00000000' + (n >>> 0).toString(16)).slice(-8);
+    }
+    return null;
+  }
+
   function defaultModel() {
     return {
       kind: 'cap2',
@@ -44,7 +68,8 @@
       duration: 10.0,
       generator: { distribution: 'seq', clientsStart: '16.0.0.1', clientsEnd: '16.0.1.255',
                    serversStart: '48.0.0.1', serversEnd: '48.0.0.255',
-                   clientsPerGb: 201, minClients: 101, dualPortMask: '1.0.0.0', tcpAging: 1, udpAging: 1 },
+                   clientsPerGb: 201, minClients: 101, dualPortMask: '1.0.0.0', tcpAging: 1, udpAging: 1,
+                   clientPools: null, serverPools: null },
       flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
                vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null,
                srcIpv6: null, dstIpv6: null, tw: null,
@@ -88,7 +113,16 @@
               text: 'No cap2 generator registered for TRex v' + model.trexVersion + '.' }));
             return;
           }
-          TB.ui.output.render(outputPane, { result: gen(model), model: model });
+          TB.ui.output.render(outputPane, { result: gen(model), model: model,
+            /* two distinct open operations, matching the output-pane labels:
+               a .yaml TRex profile is parsed from its body; a .json builder
+               file is an exact restore. */
+            profileAccept: '.yaml,.yml',
+            onOpenProfile: function (text, filename) { importArtifact(text, filename); },
+            onOpenBuilderFile: function (text) {
+              try { loadModel(JSON.parse(text)); }
+              catch (e) { TB.ui.toast('Not a valid builder file (.json): ' + e.message, 'err'); }
+            } });
         }, 120);
       }
 
@@ -134,30 +168,8 @@
             TB.persist.deleteProfile('cap2', savedSel.value);
             renderTopbar();
           } }));
-        var fileInput = el('input', { type: 'file', accept: '.yaml,.yml,.json' });
-        fileInput.style.display = 'none';
-        fileInput.addEventListener('change', function () {
-          var f = fileInput.files[0];
-          if (!f) { return; }
-          var reader = new FileReader();
-          reader.onload = function () {
-            var text = String(reader.result);
-            /* .yaml/.yml -> artifact re-import; .json -> raw model. If the extension
-               is ambiguous, sniff: a leading "{" is a JSON model, otherwise YAML. */
-            if (/\.ya?ml$/i.test(f.name) || (!/\.json$/i.test(f.name) && !/^\s*\{/.test(text))) {
-              importArtifact(text, f.name);
-            } else {
-              try { loadModel(JSON.parse(text)); }
-              catch (e) { TB.ui.toast('Not valid JSON: ' + e.message, 'err'); }
-            }
-            fileInput.value = '';
-          };
-          reader.readAsText(f);
-        });
-        actions.appendChild(fileInput);
-        actions.appendChild(el('button', { class: 'btn btn-secondary', text: 'Import…',
-          title: TB.help.cap2.importFile,
-          onclick: function () { fileInput.click(); } }));
+        /* File open lives in the output pane now, split into two clearly-labelled
+           actions (Open profile… / Open builder file…) wired in regen(). */
         topbar.appendChild(actions);
       }
 
@@ -280,6 +292,65 @@
         return box;
       }
 
+      /* ---------- per-template generator pools ---------- */
+      function newPool(side) {
+        var p = { name: (side === 'client' ? 'c' : 's') +
+          ((model.generator[side === 'client' ? 'clientPools' : 'serverPools'] || []).length + 1),
+          distribution: model.generator.distribution || 'seq', ipStart: '', ipEnd: '' };
+        if (side === 'server') { p.trackPorts = false; }
+        return p;
+      }
+
+      function poolListEditor(side) {
+        var isServer = side === 'server';
+        var key = isServer ? 'serverPools' : 'clientPools';
+        var g = model.generator;
+        var box = el('div', {});
+        (g[key] || []).forEach(function (p, idx) {
+          var row = el('div', { class: 'vm-var-row' });
+          row.appendChild(field({ label: 'name', tip: TB.help.cap2.poolName, type: 'text', value: p.name, width: '60px',
+            onChange: function (v) { p.name = v || ''; renderEditor(); regen(); } }));
+          row.appendChild(field({ label: 'distribution', type: 'select', value: p.distribution,
+            options: [{ value: 'seq' }, { value: 'rand' }],
+            onChange: function (v) { p.distribution = v; regen(); } }));
+          row.appendChild(field({ label: 'ip_start', type: 'text', value: p.ipStart, width: '105px',
+            validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+            onChange: function (v) { p.ipStart = v || ''; regen(); } }));
+          row.appendChild(field({ label: 'ip_end', type: 'text', value: p.ipEnd, width: '105px',
+            validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
+            onChange: function (v) { p.ipEnd = v || ''; regen(); } }));
+          if (isServer) {
+            row.appendChild(field({ label: 'track_ports', tip: TB.help.cap2.trackPorts, type: 'checkbox', value: p.trackPorts === true,
+              onChange: function (v) { p.trackPorts = !!v; regen(); } }));
+          }
+          row.appendChild(el('button', { class: 'btn btn-small btn-danger', text: '✕', title: 'delete pool',
+            onclick: function () {
+              g[key].splice(idx, 1);
+              if (!g[key].length) { g[key] = null; }
+              renderEditor(); regen();
+            } }));
+          box.appendChild(row);
+        });
+        box.appendChild(el('button', { class: 'btn btn-small', text: '+ Add ' + side + ' pool',
+          onclick: function () {
+            g[key] = g[key] || [];
+            g[key].push(newPool(side));
+            renderEditor(); regen();
+          } }));
+        return box;
+      }
+
+      function poolsSection() {
+        var box = el('div', {});
+        box.appendChild(el('div', { class: 'field-hint',
+          text: 'Optional named sub-ranges. A pcap template can pin its client/server IPs to a pool via client_pool / server_pool (in the template editor below) instead of the global ranges above. Matches the shipped per_template_gen / many_client profiles.' }));
+        box.appendChild(el('div', { style: 'margin:8px 0 2px; font-weight:600;' }, [el('span', { text: 'Client pools (generator_clients)' })]));
+        box.appendChild(poolListEditor('client'));
+        box.appendChild(el('div', { style: 'margin:10px 0 2px; font-weight:600;' }, [el('span', { text: 'Server pools (generator_servers)' })]));
+        box.appendChild(poolListEditor('server'));
+        return box;
+      }
+
       function flagsSection() {
         var f = model.flags;
         var box = el('div', {});
@@ -322,9 +393,9 @@
         /* min/max_src/dst_ip overrides - hex 32-bit values */
         var r4 = el('div', { class: 'field-row' });
         [['minSrcIp', 'min_src_ip'], ['maxSrcIp', 'max_src_ip'], ['minDstIp', 'min_dst_ip'], ['maxDstIp', 'max_dst_ip']].forEach(function (p) {
-          r4.appendChild(field({ label: p[1], tip: TB.help.cap2.minMaxIp, type: 'text', value: f[p[0]], width: '105px', placeholder: '0x10000001',
-            validate: function (v) { return (v === '' || /^0x[0-9a-fA-F]+$/.test(v)) ? null : 'hex like 0x10000001'; },
-            onChange: function (v) { f[p[0]] = v || null; regen(); } }));
+          r4.appendChild(field({ label: p[1], tip: TB.help.cap2.minMaxIp, type: 'text', value: hexToIp(f[p[0]]), width: '115px', placeholder: '16.0.0.1',
+            validate: function (v) { return (v === '' || ipToHex(v)) ? null : 'IPv4 (16.0.0.1) or hex (0x10000001)'; },
+            onChange: function (v) { f[p[0]] = v ? (ipToHex(v) || v) : null; regen(); } }));
         });
         box.appendChild(r4);
 
@@ -352,7 +423,14 @@
         var r1 = el('div', { class: 'field-row' });
         r1.appendChild(field({ label: 'Pcap path (relative to the TRex dir)', tip: TB.help.cap2.pcapName, type: 'text', value: c.name,
           width: '230px', datalist: 'cap2-pcaps',
-          onChange: function (v) { c.name = v || ''; renderList(); regen(); } }));
+          onChange: function (v) {
+            c.name = v || ''; renderList(); regen();
+            /* live-refresh the section header without rebuilding the editor
+               (a full renderEditor here would blur the field mid-typing) */
+            var sec = editorPane.lastElementChild;
+            var titleSpan = sec && sec.querySelector('.section-head > span:not(.caret):not(.tip-icon)');
+            if (titleSpan) { titleSpan.textContent = 'Pcap template: ' + (c.name || '?').split('/').pop(); }
+          } }));
         var browse = TB.ui.pcapBrowseButton('cap2', function (dir, file) {
           c.name = dir + '/' + file;
           renderList(); renderEditor(); regen();
@@ -383,6 +461,22 @@
             onChange: function (v) { c.serverAddr = v || null; regen(); } }));
         }
         box.appendChild(r2);
+
+        /* client_pool / server_pool: only meaningful when pools are defined */
+        var g = model.generator;
+        if ((g.clientPools && g.clientPools.length) || (g.serverPools && g.serverPools.length)) {
+          var r3 = el('div', { class: 'field-row' });
+          [['clientPool', 'client_pool', g.clientPools], ['serverPool', 'server_pool', g.serverPools]].forEach(function (p) {
+            var names = (p[2] || []).map(function (x) { return x.name; });
+            /* keep a stale reference visible so the user can see/fix it */
+            if (c[p[0]] && names.indexOf(c[p[0]]) === -1) { names = names.concat(c[p[0]]); }
+            var opts = [{ value: '', label: '(global range)' }].concat(names.map(function (n) { return { value: n, label: n }; }));
+            r3.appendChild(field({ label: p[1], tip: TB.help.cap2.poolRef, type: 'select',
+              value: c[p[0]] || '', options: opts,
+              onChange: function (v) { c[p[0]] = v || null; regen(); } }));
+          });
+          box.appendChild(r3);
+        }
 
         /* dyn_pyload editor */
         var dynBox = el('div', {});
@@ -419,6 +513,9 @@
         editorPane.innerHTML = '';
         editorPane.appendChild(el('div', { class: 'pane-title', text: 'Profile' }));
         editorPane.appendChild(TB.ui.section('Generator (IP ranges & tuple pool)', generatorSection(), true, TB.help.cap2._sections.generator));
+        var hasPools = (model.generator.clientPools && model.generator.clientPools.length) ||
+                       (model.generator.serverPools && model.generator.serverPools.length);
+        editorPane.appendChild(TB.ui.section('Per-template generator pools (named client/server sub-ranges)', poolsSection(), !!hasPools, TB.help.cap2._sections.pools));
         editorPane.appendChild(TB.ui.section('Global replay flags (cap_ipg / vlan / mac override)', flagsSection(), false, TB.help.cap2._sections.flags));
         var c = model.capInfo[selectedIdx];
         if (!c) {
