@@ -85,7 +85,15 @@
 
   function cap2Cap(name) {
     return { name: name, cps: 1, ipg: 10000, rtt: 10000, w: 1,
-             limit: null, plugin_id: null, dynPyload: null };
+             limit: null, plugin_id: null, oneAppServer: null, serverAddr: null, dynPyload: null };
+  }
+
+  /* "[0x0,0x0,0x0,0x1,0x0,0x00]" -> [0,0,0,1,0,0], or null if not 6 bytes. */
+  function parseMacArray(v) {
+    var m = /\[([^\]]*)\]/.exec(String(v || ''));
+    if (!m) { return null; }
+    var parts = m[1].split(',').map(function (x) { return parseInt(x.trim(), x.trim().indexOf('0x') === 0 ? 16 : 10); });
+    return (parts.length === 6 && parts.every(function (n) { return isFinite(n); })) ? parts : null;
   }
 
   TB.imp.parsers.cap2 = function (text) {
@@ -97,7 +105,7 @@
                    serversStart: '', serversEnd: '', clientsPerGb: null, minClients: null,
                    dualPortMask: null, tcpAging: null, udpAging: null },
       flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
-               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null },
+               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null },
       capInfo: []
     };
     var mapped = 0, total = 0, unmapped = [];
@@ -127,6 +135,11 @@
       if (key === 'cap_override_ipg') { model.flags.capOverrideIpg = pv(val); mapped++; total++; section = null; return; }
       if (key === 'cap_ipg_min') { model.flags.capIpgMin = pv(val); mapped++; total++; section = null; return; }
       if (key === 'mac_override_by_ip') { model.flags.macOverrideByIp = pv(val); mapped++; total++; section = null; return; }
+      if (key === 'mac') {
+        var mm = parseMacArray(val);
+        if (mm) { model.flags.mac = mm; mapped++; total++; section = null; return; }
+        /* not a 6-byte source-mac (e.g. a per-pool mac) - leave for the unmapped tally */
+      }
       if (key === 'vlan') {
         var en = /enable\s*:\s*(\d+)/.exec(val), v0 = /vlan0\s*:\s*(\d+)/.exec(val), v1 = /vlan1\s*:\s*(\d+)/.exec(val);
         model.flags.vlan = { enabled: !!(en && +en[1]),
@@ -147,6 +160,8 @@
           if (key === 'pkt_id') { dyn = { pktId: pv(val), pyldOffset: 0, type: 0, len: 4, mask: '0xffffffff' }; cap.dynPyload.push(dyn); mapped++; total++; return; }
           if (dyn && CAP2_DYN.hasOwnProperty(key)) { dyn[CAP2_DYN[key]] = (key === 'mask') ? String(val) : pv(val); mapped++; total++; return; }
         }
+        if (cap && key === 'server_addr') { cap.serverAddr = String(pv(val)); mapped++; total++; return; }
+        if (cap && key === 'one_app_server') { cap.oneAppServer = /^(true|1)$/i.test(val); mapped++; total++; return; }
         if (cap && CAP2_CAP.hasOwnProperty(key)) { cap[key] = pv(val); mapped++; total++; return; }
       }
 

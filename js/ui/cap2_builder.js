@@ -8,7 +8,19 @@
 
   function defaultCap() {
     return { name: 'cap2/dns.pcap', cps: 1.0, ipg: 10000, rtt: 10000, w: 1,
-             limit: null, plugin_id: null, dynPyload: null };
+             limit: null, plugin_id: null, oneAppServer: null, serverAddr: null, dynPyload: null };
+  }
+
+  /* source-mac base: model stores a 6-byte array; the UI edits colon-hex. */
+  function macToStr(arr) {
+    if (!arr || arr.length !== 6) { return ''; }
+    return arr.map(function (b) { var h = (b & 0xff).toString(16); return h.length < 2 ? '0' + h : h; }).join(':');
+  }
+  function strToMac(s) {
+    var parts = String(s || '').trim().split(/[:\-\s]+/).filter(Boolean);
+    if (parts.length !== 6) { return null; }
+    var out = parts.map(function (p) { return parseInt(p, 16); });
+    return out.every(function (n) { return isFinite(n) && n >= 0 && n <= 255; }) ? out : null;
   }
 
   function defaultModel() {
@@ -22,7 +34,7 @@
                    serversStart: '48.0.0.1', serversEnd: '48.0.0.255',
                    clientsPerGb: 201, minClients: 101, dualPortMask: '1.0.0.0', tcpAging: 1, udpAging: 1 },
       flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
-               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null },
+               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null },
       capInfo: [defaultCap()]
     };
   }
@@ -267,6 +279,10 @@
           onChange: function (v) { f.capIpgMin = v; regen(); } }));
         r1.appendChild(field({ label: 'mac_override_by_ip', tip: TB.help.cap2.macOverrideByIp, type: 'int', value: f.macOverrideByIp, width: '70px',
           onChange: function (v) { f.macOverrideByIp = v; regen(); } }));
+        r1.appendChild(field({ label: 'mac (source base)', tip: TB.help.cap2.mac, type: 'text', value: macToStr(f.mac), width: '150px',
+          placeholder: '00:00:00:01:00:00',
+          validate: function (v) { return (v === '' || strToMac(v)) ? null : 'six hex bytes, e.g. 00:00:00:01:00:00'; },
+          onChange: function (v) { f.mac = v ? strToMac(v) : null; regen(); } }));
         box.appendChild(r1);
         var r2 = el('div', { class: 'field-row' });
         r2.appendChild(field({ label: 'VLAN load balance', tip: TB.help.cap2.vlanLb, type: 'checkbox', value: f.vlan.enabled,
@@ -308,6 +324,14 @@
           value: c.plugin_id === null || c.plugin_id === undefined ? '' : String(c.plugin_id),
           options: [{ value: '', label: '(none)' }, { value: '4', label: '4 - HTTP' }, { value: '5', label: '5 - DHCP' }],
           onChange: function (v) { c.plugin_id = v === '' ? null : parseInt(v, 10); regen(); } }));
+        r2.appendChild(field({ label: 'one_app_server (all flows to one server)', tip: TB.help.cap2.oneAppServer, type: 'checkbox',
+          value: c.oneAppServer === true,
+          onChange: function (v) { c.oneAppServer = v ? true : null; if (!v) { c.serverAddr = null; } renderEditor(); regen(); } }));
+        if (c.oneAppServer) {
+          r2.appendChild(field({ label: 'server_addr', tip: TB.help.cap2.serverAddr, type: 'text', value: c.serverAddr, width: '110px',
+            validate: function (v) { return (v === '' || TB.util.isIpv4(v)) ? null : 'invalid IPv4'; },
+            onChange: function (v) { c.serverAddr = v || null; regen(); } }));
+        }
         box.appendChild(r2);
 
         /* dyn_pyload editor */

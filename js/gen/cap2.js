@@ -106,6 +106,9 @@
       body.push('  vlan : { enable : 1, vlan0 : ' + f.vlan.vlan0 + ', vlan1 : ' + f.vlan.vlan1 + ' }');
     }
     if (set(f.macOverrideByIp)) { body.push('  mac_override_by_ip : ' + f.macOverrideByIp); }
+    if (f.mac && f.mac.length === 6) {
+      body.push('  mac : [' + f.mac.map(function (b) { return '0x' + (b & 0xff).toString(16); }).join(',') + ']');
+    }
 
     body.push('  cap_info :');
     (model.capInfo || []).forEach(function (c) {
@@ -116,6 +119,10 @@
       body.push('       ' + pad('w', 3) + ' : ' + c.w);
       if (set(c.limit)) { body.push('       limit : ' + c.limit); }
       if (set(c.plugin_id)) { body.push('       plugin_id : ' + c.plugin_id); }
+      if (set(c.serverAddr)) { body.push('       server_addr : "' + c.serverAddr + '"'); }
+      if (c.oneAppServer !== null && c.oneAppServer !== undefined) {
+        body.push('       one_app_server : ' + (c.oneAppServer ? 'true' : 'false'));
+      }
       if (c.dynPyload && c.dynPyload.length) {
         body.push('       dyn_pyload :');
         c.dynPyload.forEach(function (d) {
