@@ -463,3 +463,4 @@ pre.code {
 #toast.show { transform: translateX(-50%) translateY(0); }
 #toast.ok { border-color: var(--ok); }
 #toast.err { border-color: var(--err); }
+#toast.warn { border-color: var(--warn); }

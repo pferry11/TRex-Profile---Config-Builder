@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.21.0** · Target: TRex v3.06
+**App version 0.22.0** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -11,7 +11,7 @@ interactive forms — no install, no build step, no backend required.
 |---|---|
 | **STL Profile** | Stateless traffic profiles (`.py`) — packet layers, TX modes, field-engine variables, flow/latency stats, tunables |
 | **ASTF Profile** | Advanced stateful profiles (`.py`) — pcap replay lists or send/recv programs, CPS weights, TCP tuning, ramp-up |
-| **cap2 (STF)** | Legacy pcap-replay YAML profiles with `dyn_pyload` payload manipulation |
+| **cap2 (STF)** | Legacy pcap-replay YAML profiles with `dyn_pyload` payload manipulation — and **re-import**: load a generated (or hand-written) `.yaml` back into the builder |
 | **EMU** | TRex-EMU client-emulation profiles (`.py`) — ARP/ICMP/IGMP/IPv6 ND/DHCPv4-v6/DNS/mDNS plugins + launch runbook |
 | **TPG** | Tagged Packet Group tags file (`_tpg_tags.json`) for per-VLAN rx stats, with the `tpg_enable`/`tpg_stats` console runbook |
 | **BIRD** | BIRD routing configs (`bird_*.conf`) — BGP/OSPF/RIP + generated static-route tables, with the veth-node console runbook |
@@ -38,6 +38,20 @@ All six profile builders keep **undo/redo** history (model snapshots, 50 deep),
 and the workspace persists to **IndexedDB** (with localStorage migration and
 fallback) so your work survives a reload.
 
+**Re-editing generated files:** the profile file itself is enough to reload —
+you don't need to keep the sidecar `.json`. The **cap2** tab's **Import…**
+button accepts a generated `.yaml` as well as a `.json` model, and **values are
+read straight from the file body**, so any edit you made (a changed IP or rate)
+comes back in — the body is the single source of truth, with no hidden copy to
+drift out of sync. A one-line tag at the foot of the file
+(`# trexb: cap2 schemaVersion=1`) just marks it as tool-generated and names the
+field map; it holds no values. A file this tool made maps fully; a hand-written
+or third-party `.yaml` with no tag is parsed best-effort, loading every key it
+recognizes and reporting how much of the file could be mapped. The app has no
+interpreter and won't try to understand arbitrary scripts, so only tool-generated
+files are guaranteed to map fully. (Re-import for the `.py` builders is on the
+roadmap; the tag scheme and coverage report are already shared.)
+
 ## Run it
 
 **Option A — no server:** open `index.html` in a browser. Everything works
@@ -57,7 +71,7 @@ pcaps under `TREX_DIR`) and STL/ASTF outputs gain **Validate on server**
 ## Tests
 
 Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (87 tests). No toolchain needed.
+generators (89 tests). No toolchain needed.
 
 ## Notes
 
@@ -69,6 +83,9 @@ generators (87 tests). No toolchain needed.
   candidate improvements.
 - Manual screenshots regenerate with `powershell -File tools\screenshots.ps1`
   (headless Edge) whenever the UI changes.
+- `node tools/cap2_import_coverage.js` measures how much of the shipped v3.06
+  cap2 profiles the importer can map back into editable models (needs a local
+  `v3.06/` tree) — the objective metric when closing cap2 import-fidelity gaps.
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is

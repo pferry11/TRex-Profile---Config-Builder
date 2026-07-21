@@ -57,6 +57,17 @@
       return out;
     },
 
+    // Self-describing file tag: one comment line marking a file this tool
+    // generated, naming the builder kind + schema version so re-import can pick
+    // the right field map. It carries NO values - values live only in the file
+    // body (single source of truth), so hand-edits to the body are always
+    // honoured on re-import. Works as a "#" comment in YAML and Python outputs.
+    // See js/core/import.js.
+    fileTag: function (kind, schemaVersion) {
+      return '# trexb: ' + kind + ' schemaVersion=' + (schemaVersion || 1) +
+        ' - edit values above; re-import reads them from the file body';
+    },
+
     // argparse block used inside get_streams/get_profile. Returns indented lines.
     argparseLines: function (tunables, indent) {
       var py = TB.gen.py;

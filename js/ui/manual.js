@@ -136,6 +136,17 @@
         'file plus the model JSON into one zip per test (profile + runbook + launch script from a scenario, for ' +
         'example). Profiles also <strong>Save</strong> into the browser (IndexedDB, so big pcap-heavy workspaces fit); use ' +
         '<strong>Export workspace</strong> in the header for a durable backup of everything.</p>' +
+        '<h4>Re-editing a generated profile</h4>' +
+        '<p>You don\'t have to keep the model JSON to edit a profile again - the profile file itself is enough. On the ' +
+        '<strong>cap2</strong> tab, <strong>Import…</strong> accepts a generated <code>.yaml</code> as well as a ' +
+        '<code>.json</code> model. The <em>values are read straight from the file body</em>, so any edit you made - a ' +
+        'changed IP, a different rate - comes right back in (the body is the single source of truth; there is no hidden ' +
+        'copy to fall out of sync). A one-line tag at the foot of the file (<code># trexb: cap2 schemaVersion=1</code>) ' +
+        'just marks it as ours and names the field map to use; it holds no values. A file this tool generated maps fully; ' +
+        'a hand-written or third-party <code>.yaml</code> with no tag is read best-effort - the builder maps every key it ' +
+        'recognises, loads that, and tells you how much of the file was mapped, listing any lines it could not place. ' +
+        'The app has no interpreter and does not try to understand arbitrary scripts, so only tool-generated files are ' +
+        'guaranteed to map fully. (Re-import for the <code>.py</code> builders is on the roadmap; see <em>Future updates</em>.)</p>' +
         '<p>STL profiles also offer <strong>Publish to server</strong>: enter a running ' +
         '<a href="https://github.com/pferry11/TRex-Backend">TRex-Backend</a> host (prefilled from the active server’s ' +
         'mgmt host) and the profile is POSTed to it. It lands in that box’s vetted-profiles directory and immediately ' +
@@ -222,7 +233,14 @@
         'on every replayed flow: pick the packet, byte offset, length in 32-bit words, and whether to write random ' +
         'data or the flow\'s client IP. This makes each replayed flow unique without editing the capture.</p>' +
         '<h4>Other flags</h4><p><code>cap_ipg</code> keeps the capture\'s real timing; the VLAN block alternates flows ' +
-        'across two tags; <code>plugin_id</code> enables HTTP/DHCP-aware replay.</p>' + fieldTable('cap2');
+        'across two tags; <code>plugin_id</code> enables HTTP/DHCP-aware replay.</p>' +
+        '<h4>Editing an existing profile</h4><p><strong>Import…</strong> opens a <code>.yaml</code> profile (or a ' +
+        '<code>.json</code> model) back into the builder - so instead of editing in vi/nano on the box you can add a ' +
+        'pcap template or change an IP here and regenerate. Values are read from the file body, so any change you made ' +
+        'is preserved. Profiles this tool generated map fully; shipped or hand-written files import best-effort and the ' +
+        'app tells you how much it could map, listing any lines it did not recognise (those become candidate roadmap ' +
+        'items). See <em>Getting started &rarr; Re-editing a generated profile</em> for the full detail.</p>' +
+        fieldTable('cap2');
     } },
 
     { id: 'emu', title: 'EMU (client emulation)', html: function () {
@@ -433,7 +451,11 @@
         ['App platform', 'Adjustable text size', 'Settings -> Text size: a global scale plus per-group sliders (field names, controls, generated output, manual) - applied live via CSS variables, saved with the workspace.', 'Small', 'done'],
         ['CLI builder', 'Service mode & capture helper', 'Console snippets for service mode, capture record/monitor and BPF filters.', 'Small', 'done'],
         ['App platform', 'Publish to server (control seam)', 'Push a generated STL profile straight to a running TRex-Backend (Publish to server, output pane); it lands allowlisted in that box’s dashboard with its summary. Live control itself lives in the separate TRex-Backend/dashboard, kept small on purpose.', 'Medium', 'done'],
-        ['App platform', 'Import existing .py profiles', 'Parse shipped/hand-written profiles back into editable models. Python parsing in JS is genuinely hard - realistic only for app-generated files.', 'Large', 'planned'],
+        ['App platform', 'Re-import cap2 .yaml profiles', 'Load a generated (or hand-written) cap2 .yaml back into the builder (Import… button). Values are read from the file body, so hand-edits (a changed IP or rate) are honoured; a one-line tag marks builder files. Other .yaml files parse best-effort and you are told how much could be mapped.', 'Large', 'done'],
+        ['App platform', 'Re-import .py profiles (STL/ASTF)', 'Extend the same body-is-truth re-edit seam to the Python builders. The tag scheme and coverage report are shared and proven (cap2); the remaining work is per-field readers ("codecs") that locate each value in the generated Python and segmentation of repeated blocks (streams / templates) - genuinely hard for arbitrary Python, realistic only for app-generated layout, with a structural fingerprint for parse-confidence as a possible aid.', 'Large', 'in-progress'],
+        ['cap2 builder', 'Common global cap2 fields', 'one_app_server + server_addr (13 shipped files), track_ports (12) and the source mac array (7) - the high-frequency fields real v3.06 cap2 profiles use that the builder does not model yet. Ranked from a 67-file import-coverage run; adding them lifts most partial imports to 100% and lets the AVL/sfr benchmark profiles regenerate losslessly.', 'Small', 'planned'],
+        ['cap2 builder', 'cap2 IPv6 base + timer-wheel + per-template IP ranges', 'src_ipv6/dst_ipv6 base addresses (ipv6*.yaml), the timer-wheel tw block (buckets/levels/bucket_time_usec), and per-template min/max_src/dst_ip overrides (rtsp/sfr_agg). Medium-frequency gaps from the same coverage run.', 'Medium', 'planned'],
+        ['cap2 builder', 'Per-template generator pools', 'Named client/server pools (generator_clients/generator_servers, per-template client_pool/server_pool) used by per_template_gen*/many_client_example - a richer generator model than the single client/server range. The only real <60% importers in the 67-file run.', 'Large', 'planned'],
         ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small', 'done'],
         ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium', 'done'],
         ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small', 'done']

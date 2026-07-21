@@ -147,6 +147,7 @@
         cap: 'One pcap template with its own rate, timing and optional payload-rewrite rules.'
       },
       profileName: 'Name for the generated .yaml file and app save slot.',
+      importFile: 'Import a .yaml profile or a .json model back into the builder. Values are read from the file body, so edits you made (a changed IP or rate) come straight back in. Files this tool generated map fully; hand-written or third-party .yaml files import best-effort - you\'ll be told how much could be mapped.',
       duration: 'Test length in seconds (t-rex-64 -d can extend/override at run time).',
       clientsRange: 'Client IP pool flows are sourced from.',
       serversRange: 'Server IP pool flows are destined to. Must not overlap the client range.',

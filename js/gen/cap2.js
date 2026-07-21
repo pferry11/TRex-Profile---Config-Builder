@@ -79,7 +79,7 @@
       '# TRex Profile & Config Builder - cap2 legacy STF profile',
       '# Generated: ' + (opts.now || TB.util.todayIso()) + '   Target: TRex v' + (model.trexVersion || '3.06'),
       '# Run: ./t-rex-64 -f ' + fileBase + '.yaml -d ' + (model.duration || 10) + ' --cfg /etc/trex_cfg.yaml',
-      '# Re-edit: load ' + fileBase + '.trexb.json in TRex Profile & Config Builder'
+      '# Re-edit: import this .yaml back into TRex Profile & Config Builder'
     ];
     lines = lines.concat(TB.gen.py.summaryComment(TB.gen.summary ? TB.gen.summary(model) : []));
     lines.push('# ' + new Array(78).join('-'));
@@ -131,6 +131,9 @@
     /* mandatory leading dash of the single-element list */
     body[0] = '- ' + body[0].slice(2);
     lines = lines.concat(body);
+    /* self-describing re-edit tag; values live in the body above (see js/core/import.js) */
+    lines.push('');
+    lines.push(TB.gen.py.fileTag('cap2', model.schemaVersion));
     lines.push('');
 
     return {

@@ -60,6 +60,7 @@
 <script src="js/core/persist.js"></script>
 <script src="js/core/settings.js"></script>
 <script src="js/core/backend.js"></script>
+<script src="js/core/import.js"></script>
 <script src="js/gen/registry.js"></script>
 <script src="js/gen/py.js"></script>
 <script src="js/gen/summarize.js"></script>
@@ -1280,7 +1281,7 @@ var goldenCap2Dns =
 '# TRex Profile & Config Builder - cap2 legacy STF profile\n' +
 '# Generated: 2026-07-06   Target: TRex v3.06\n' +
 '# Run: ./t-rex-64 -f dns_like.yaml -d 10 --cfg /etc/trex_cfg.yaml\n' +
-'# Re-edit: load dns_like.trexb.json in TRex Profile & Config Builder\n' +
+'# Re-edit: import this .yaml back into TRex Profile & Config Builder\n' +
 summaryBlock([
   'Legacy STF replay for 10 s; clients 16.0.0.1-16.0.1.255 talk to servers 48.0.0.1-48.0.0.255 (seq).',
   'dns.pcap: 1 flows/s, ipg 10000 usec, rtt 10000 usec, weight 1.'
@@ -1303,7 +1304,9 @@ summaryBlock([
 '       cps : 1\n' +
 '       ipg : 10000\n' +
 '       rtt : 10000\n' +
-'       w   : 1\n';
+'       w   : 1\n' +
+'\n' +
+'# trexb: cap2 schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 test('cap2 golden: dns.yaml-like profile', function () {
   var r = c2gen(cap2Model('dns_like'), NOW);
@@ -1366,6 +1369,59 @@ test('cap2 round-trip: model -> JSON -> parse -> regenerate identical', function
   var once = c2gen(m, NOW).files[0].content;
   var twice = c2gen(JSON.parse(JSON.stringify(m)), NOW).files[0].content;
   return { pass: once === twice, detail: once === twice ? '' : firstDiff(once, twice) };
+});
+
+test('cap2 re-import: generated .yaml maps fully from the body and honours a hand-edited value', function () {
+  var m = cap2Model('reimport');
+  m.flags.capIpg = true;
+  m.flags.vlan = { enabled: true, vlan0: 100, vlan1: 200 };
+  m.flags.macOverrideByIp = 2;
+  m.capInfo[0].limit = 20;
+  m.capInfo[0].dynPyload = [{ pktId: 1, pyldOffset: 16, type: 0, len: 4, mask: '0xffffffff' }];
+  var yaml = c2gen(m, NOW).files[0].content;
+  var res = TB.imp.parse(yaml, { kind: 'cap2' });
+  if (!res.ok || res.source !== 'tool') { return { pass: false, detail: 'source: ' + res.source + ' ok: ' + res.ok }; }
+  if (res.coverage !== 1) { return { pass: false, detail: 'coverage ' + res.coverage + ' unmapped: ' + res.unmapped.join('|') }; }
+  var g = res.model.generator;
+  var okBody = g.clientsStart === '16.0.0.1' && g.serversEnd === '48.0.0.255' &&
+    res.model.flags.capIpg === true && res.model.flags.vlan.enabled === true && res.model.flags.macOverrideByIp === 2 &&
+    res.model.capInfo[0].limit === 20 && res.model.capInfo[0].dynPyload.length === 1 &&
+    res.model.capInfo[0].dynPyload[0].mask === '0xffffffff' && res.model.schemaVersion === 1 && res.model.trexVersion === '3.06';
+  if (!okBody) { return { pass: false, detail: 'body fields not recovered: ' + JSON.stringify(res.model.generator) }; }
+  /* footgun fix: an IP edited in the body (not any duplicate) must come back changed */
+  var edited = yaml.replace('clients_start  : "16.0.0.1"', 'clients_start  : "10.9.8.7"');
+  var res2 = TB.imp.parse(edited, { kind: 'cap2' });
+  var honoured = res2.ok && res2.model.generator.clientsStart === '10.9.8.7' && res2.coverage === 1;
+  return { pass: honoured, detail: honoured ? '' : 'edited IP not honoured: ' + res2.model.generator.clientsStart };
+});
+
+test('cap2 re-import: hand-written YAML (no tag) maps best-effort with a coverage report', function () {
+  var hand = [
+    '- duration : 5.0',
+    '  generator :',
+    '          distribution   : "seq"',
+    '          clients_start  : "16.0.0.1"',
+    '          clients_end    : "16.0.0.255"',
+    '          servers_start  : "48.0.0.1"',
+    '          servers_end    : "48.0.0.255"',
+    '          some_future_knob : 7',
+    '  cap_info :',
+    '     - name: cap2/http.pcap',
+    '       cps : 3',
+    '       ipg : 20000',
+    ''
+  ].join('\n');
+  var res = TB.imp.parse(hand, { kind: 'cap2' });
+  if (!res.ok || res.source !== 'foreign') { return { pass: false, detail: 'source: ' + res.source }; }
+  var m = res.model;
+  var checks = [
+    m.duration === 5, m.generator.clientsStart === '16.0.0.1', m.generator.serversEnd === '48.0.0.255',
+    m.capInfo.length === 1, m.capInfo[0].name === 'cap2/http.pcap', m.capInfo[0].cps === 3, m.capInfo[0].ipg === 20000,
+    res.unmapped.length === 1, res.unmapped[0].indexOf('some_future_knob') !== -1,
+    res.mapped === 9, res.total === 10, res.coverage < 1
+  ];
+  var bad = checks.indexOf(false);
+  return { pass: bad === -1, detail: bad === -1 ? '' : 'failed check #' + bad };
 });
 
 /* ================= trex_cfg.yaml suite ================= */
@@ -2320,6 +2376,10 @@ var TEST_DOCS = {
     'Four warning paths in one sweep: non-positive cps, client/server range overlap, plugin_id without dyn_pyload, and dyn_pyload field validation.',
   'cap2 round-trip: model -> JSON -> parse -> regenerate identical':
     'JSON round-trip guarantee for cap2 models.',
+  'cap2 re-import: generated .yaml maps fully from the body and honours a hand-edited value':
+    'The re-edit seam (v0.22.0): a generated cap2 .yaml carries a one-line self-describing tag ("# trexb: cap2 schemaVersion=1") but NO values - values live only in the body. TB.imp.parse reads them from the body (source=tool, 100% coverage, flags + dyn_pyload + schema/trexVersion recovered), and critically, editing clients_start in the body and re-importing returns the edited IP - proving hand-edits are honoured (the body is the single source of truth, not a stale embedded copy).',
+  'cap2 re-import: hand-written YAML (no tag) maps best-effort with a coverage report':
+    'The best-effort path for files with no tag: TB.imp.parse reads the recognised generator/cap_info keys back out, loads what it can (source=foreign), and reports how much mapped (9 of 10 here) - listing the one unrecognised line (some_future_knob) as unmapped so the UI can warn that only tool-generated files map fully.',
   'cfg golden: IP mode (simple_cfg-like)':
     'The baseline trex_cfg.yaml in IP/gateway mode, matching the shipped cfg/simple_cfg.yaml. Full-file golden.',
   'cfg golden: MAC + platform (xl710-like)':
