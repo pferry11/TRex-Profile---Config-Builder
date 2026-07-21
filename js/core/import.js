@@ -88,12 +88,13 @@
              limit: null, plugin_id: null, oneAppServer: null, serverAddr: null, dynPyload: null };
   }
 
-  /* "[0x0,0x0,0x0,0x1,0x0,0x00]" -> [0,0,0,1,0,0], or null if not 6 bytes. */
-  function parseMacArray(v) {
+  /* "[0x0,0x0,0x0,0x1,0x0,0x00]" -> [0,0,0,1,0,0], or null if not a numeric list.
+     Used for the 6-byte source mac and the 6-word src/dst_ipv6 base arrays. */
+  function parseHexArray(v) {
     var m = /\[([^\]]*)\]/.exec(String(v || ''));
     if (!m) { return null; }
-    var parts = m[1].split(',').map(function (x) { return parseInt(x.trim(), x.trim().indexOf('0x') === 0 ? 16 : 10); });
-    return (parts.length === 6 && parts.every(function (n) { return isFinite(n); })) ? parts : null;
+    var parts = m[1].split(',').map(function (x) { x = x.trim(); return parseInt(x, x.indexOf('0x') === 0 ? 16 : 10); });
+    return parts.every(function (n) { return isFinite(n); }) ? parts : null;
   }
 
   TB.imp.parsers.cap2 = function (text) {
@@ -105,7 +106,9 @@
                    serversStart: '', serversEnd: '', clientsPerGb: null, minClients: null,
                    dualPortMask: null, tcpAging: null, udpAging: null },
       flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
-               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null },
+               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null,
+               srcIpv6: null, dstIpv6: null, tw: null,
+               minSrcIp: null, maxSrcIp: null, minDstIp: null, maxDstIp: null },
       capInfo: []
     };
     var mapped = 0, total = 0, unmapped = [];
@@ -136,9 +139,25 @@
       if (key === 'cap_ipg_min') { model.flags.capIpgMin = pv(val); mapped++; total++; section = null; return; }
       if (key === 'mac_override_by_ip') { model.flags.macOverrideByIp = pv(val); mapped++; total++; section = null; return; }
       if (key === 'mac') {
-        var mm = parseMacArray(val);
-        if (mm) { model.flags.mac = mm; mapped++; total++; section = null; return; }
+        var mm = parseHexArray(val);
+        if (mm && mm.length === 6) { model.flags.mac = mm; mapped++; total++; section = null; return; }
         /* not a 6-byte source-mac (e.g. a per-pool mac) - leave for the unmapped tally */
+      }
+      if (key === 'src_ipv6' || key === 'dst_ipv6') {
+        var v6 = parseHexArray(val);
+        if (v6 && v6.length === 6) {
+          model.flags[key === 'src_ipv6' ? 'srcIpv6' : 'dstIpv6'] = v6;
+          mapped++; total++; section = null; return;
+        }
+      }
+      if (key === 'min_src_ip' || key === 'max_src_ip' || key === 'min_dst_ip' || key === 'max_dst_ip') {
+        var camel = key.replace(/_([a-z])/g, function (_, c) { return c.toUpperCase(); });
+        model.flags[camel] = String(pv(val)); mapped++; total++; section = null; return;
+      }
+      /* timer wheel: "tw :" opens a nested map; its sub-keys follow at deeper indent */
+      if (key === 'tw') { model.flags.tw = { buckets: null, levels: null, bucketTimeUsec: null }; section = null; return; }
+      if (model.flags.tw && (key === 'buckets' || key === 'levels' || key === 'bucket_time_usec')) {
+        model.flags.tw[key === 'bucket_time_usec' ? 'bucketTimeUsec' : key] = pv(val); mapped++; total++; return;
       }
       if (key === 'vlan') {
         var en = /enable\s*:\s*(\d+)/.exec(val), v0 = /vlan0\s*:\s*(\d+)/.exec(val), v1 = /vlan1\s*:\s*(\d+)/.exec(val);

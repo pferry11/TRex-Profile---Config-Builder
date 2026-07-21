@@ -1442,6 +1442,30 @@ test('cap2 Tier 1: global mac + per-template one_app_server/server_addr generate
     oas: res.model.capInfo[0].oneAppServer, sa: res.model.capInfo[0].serverAddr, cov: res.coverage }) };
 });
 
+test('cap2 Tier 2: ipv6 base, timer-wheel and min/max ip overrides generate and re-import', function () {
+  var m = cap2Model('tier2');
+  m.flags.srcIpv6 = [0x2001, 0x0232, 0x1002, 0x0051, 0, 0];
+  m.flags.dstIpv6 = [0x3001, 0x0db8, 3, 4, 0, 0];
+  m.flags.minSrcIp = '0x10000001'; m.flags.maxSrcIp = '0x90000001';
+  m.flags.minDstIp = '0xa0000001'; m.flags.maxDstIp = '0xb0000001';
+  m.flags.tw = { buckets: 32768, levels: 2, bucketTimeUsec: 20 };
+  var out = c2gen(m, NOW).files[0].content;
+  var needs = ['  src_ipv6 : [0x2001,0x0232,0x1002,0x0051,0x0000,0x0000]',
+    '  dst_ipv6 : [0x3001,0x0db8,0x0003,0x0004,0x0000,0x0000]',
+    '  min_src_ip : 0x10000001', '  max_dst_ip : 0xb0000001',
+    '  tw :', '     buckets : 32768', '     levels : 2', '     bucket_time_usec : 20.0'];
+  for (var i = 0; i < needs.length; i++) {
+    if (out.indexOf(needs[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(needs[i]) }; }
+  }
+  var res = TB.imp.parse(out, { kind: 'cap2' });
+  var f = res.model.flags;
+  var ok = res.ok && res.coverage === 1 &&
+    f.srcIpv6.join(',') === '8193,562,4098,81,0,0' && f.dstIpv6.join(',') === '12289,3512,3,4,0,0' &&
+    f.minSrcIp === '0x10000001' && f.maxDstIp === '0xb0000001' &&
+    f.tw && f.tw.buckets === 32768 && f.tw.levels === 2 && f.tw.bucketTimeUsec === 20;
+  return { pass: ok, detail: ok ? '' : 'round-trip: ' + JSON.stringify(f) };
+});
+
 /* ================= trex_cfg.yaml suite ================= */
 var cgen = TB.gen.resolve('3.06', 'cfg');
 var CFGNOW = { now: '2026-07-06', trexVersion: '3.06' };
@@ -2400,6 +2424,8 @@ var TEST_DOCS = {
     'The best-effort path for files with no tag: TB.imp.parse reads the recognised generator/cap_info keys back out, loads what it can (source=foreign), and reports how much mapped (9 of 10 here) - listing the one unrecognised line (some_future_knob) as unmapped so the UI can warn that only tool-generated files map fully.',
   'cap2 Tier 1: global mac + per-template one_app_server/server_addr generate and re-import':
     'The v0.23.0 cap2 import-fidelity fields, ranked from the 67-file coverage run: the global source-mac array and the per-template one_app_server/server_addr (single-server mode, per dns_one_server/lb_ex1/sfr). The generator emits mac : [..] and per-cap server_addr/one_app_server, and re-import recovers all three at 100% coverage - so the shipped AVL/sfr benchmark profiles now round-trip losslessly instead of silently dropping those lines on regenerate.',
+  'cap2 Tier 2: ipv6 base, timer-wheel and min/max ip overrides generate and re-import':
+    'The v0.24.0 cap2 import-fidelity fields (global): src_ipv6/dst_ipv6 6-word base arrays (ipv6.yaml), the min/max_src/dst_ip hex overrides (rtsp_full1/sfr_agg) and the nested timer-wheel tw block buckets/levels/bucket_time_usec (dns_tw.yaml). Generator emits all three shapes and re-import recovers them at 100% coverage - taking shipped cap2 import coverage to 61/67 files fully (the remaining 6 are the per-template generator-pools files, the deferred large item).',
   'cfg golden: IP mode (simple_cfg-like)':
     'The baseline trex_cfg.yaml in IP/gateway mode, matching the shipped cfg/simple_cfg.yaml. Full-file golden.',
   'cfg golden: MAC + platform (xl710-like)':

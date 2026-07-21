@@ -23,6 +23,18 @@
     return out.every(function (n) { return isFinite(n) && n >= 0 && n <= 255; }) ? out : null;
   }
 
+  /* src/dst_ipv6 base: model stores 6 hex words; the UI edits colon-hex groups. */
+  function ipv6ToStr(arr) {
+    if (!arr || arr.length !== 6) { return ''; }
+    return arr.map(function (w) { return ('0000' + (w & 0xffff).toString(16)).slice(-4); }).join(':');
+  }
+  function strToIpv6(s) {
+    var parts = String(s || '').trim().split(/[:\s]+/).filter(Boolean);
+    if (parts.length !== 6) { return null; }
+    var out = parts.map(function (p) { return parseInt(p, 16); });
+    return out.every(function (n) { return isFinite(n) && n >= 0 && n <= 0xffff; }) ? out : null;
+  }
+
   function defaultModel() {
     return {
       kind: 'cap2',
@@ -34,7 +46,9 @@
                    serversStart: '48.0.0.1', serversEnd: '48.0.0.255',
                    clientsPerGb: 201, minClients: 101, dualPortMask: '1.0.0.0', tcpAging: 1, udpAging: 1 },
       flags: { capIpg: null, capOverrideIpg: null, capIpgMin: null,
-               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null },
+               vlan: { enabled: false, vlan0: 100, vlan1: 200 }, macOverrideByIp: null, mac: null,
+               srcIpv6: null, dstIpv6: null, tw: null,
+               minSrcIp: null, maxSrcIp: null, minDstIp: null, maxDstIp: null },
       capInfo: [defaultCap()]
     };
   }
@@ -294,6 +308,42 @@
             onChange: function (v) { f.vlan.vlan1 = v === null ? 200 : v; regen(); } }));
         }
         box.appendChild(r2);
+
+        /* IPv6 base addresses (src_ipv6 / dst_ipv6) - 6 hex words each */
+        var r3 = el('div', { class: 'field-row' });
+        [['srcIpv6', 'src_ipv6 (6 hex words)'], ['dstIpv6', 'dst_ipv6 (6 hex words)']].forEach(function (p) {
+          r3.appendChild(field({ label: p[1], tip: TB.help.cap2.ipv6, type: 'text', value: ipv6ToStr(f[p[0]]), width: '210px',
+            placeholder: '2001:0232:1002:0051:0000:0000',
+            validate: function (v) { return (v === '' || strToIpv6(v)) ? null : 'six hex words, e.g. 2001:0232:1002:0051:0000:0000'; },
+            onChange: function (v) { f[p[0]] = v ? strToIpv6(v) : null; regen(); } }));
+        });
+        box.appendChild(r3);
+
+        /* min/max_src/dst_ip overrides - hex 32-bit values */
+        var r4 = el('div', { class: 'field-row' });
+        [['minSrcIp', 'min_src_ip'], ['maxSrcIp', 'max_src_ip'], ['minDstIp', 'min_dst_ip'], ['maxDstIp', 'max_dst_ip']].forEach(function (p) {
+          r4.appendChild(field({ label: p[1], tip: TB.help.cap2.minMaxIp, type: 'text', value: f[p[0]], width: '105px', placeholder: '0x10000001',
+            validate: function (v) { return (v === '' || /^0x[0-9a-fA-F]+$/.test(v)) ? null : 'hex like 0x10000001'; },
+            onChange: function (v) { f[p[0]] = v || null; regen(); } }));
+        });
+        box.appendChild(r4);
+
+        /* timer wheel (tw) */
+        var r5 = el('div', { class: 'field-row' });
+        r5.appendChild(field({ label: 'timer wheel (tw)', tip: TB.help.cap2.tw, type: 'checkbox', value: !!f.tw,
+          onChange: function (v) {
+            f.tw = v ? { buckets: 32768, levels: 2, bucketTimeUsec: 20 } : null;
+            renderEditor(); regen();
+          } }));
+        if (f.tw) {
+          r5.appendChild(field({ label: 'buckets', type: 'int', value: f.tw.buckets, width: '80px',
+            onChange: function (v) { f.tw.buckets = v; regen(); } }));
+          r5.appendChild(field({ label: 'levels', type: 'int', value: f.tw.levels, width: '65px',
+            onChange: function (v) { f.tw.levels = v; regen(); } }));
+          r5.appendChild(field({ label: 'bucket_time_usec', type: 'float', value: f.tw.bucketTimeUsec, width: '95px',
+            onChange: function (v) { f.tw.bucketTimeUsec = v; regen(); } }));
+        }
+        box.appendChild(r5);
         return box;
       }
 

@@ -109,6 +109,18 @@
     if (f.mac && f.mac.length === 6) {
       body.push('  mac : [' + f.mac.map(function (b) { return '0x' + (b & 0xff).toString(16); }).join(',') + ']');
     }
+    var hexWord = function (w) { return '0x' + ('0000' + (w & 0xffff).toString(16)).slice(-4); };
+    if (f.srcIpv6 && f.srcIpv6.length === 6) { body.push('  src_ipv6 : [' + f.srcIpv6.map(hexWord).join(',') + ']'); }
+    if (f.dstIpv6 && f.dstIpv6.length === 6) { body.push('  dst_ipv6 : [' + f.dstIpv6.map(hexWord).join(',') + ']'); }
+    ['minSrcIp', 'maxSrcIp', 'minDstIp', 'maxDstIp'].forEach(function (k) {
+      if (set(f[k])) { body.push('  ' + k.replace(/[A-Z]/g, function (c) { return '_' + c.toLowerCase(); }) + ' : ' + f[k]); }
+    });
+    if (f.tw) {
+      body.push('  tw :');
+      if (set(f.tw.buckets)) { body.push('     buckets : ' + f.tw.buckets); }
+      if (set(f.tw.levels)) { body.push('     levels : ' + f.tw.levels); }
+      if (set(f.tw.bucketTimeUsec)) { body.push('     bucket_time_usec : ' + durationStr(f.tw.bucketTimeUsec)); }
+    }
 
     body.push('  cap_info :');
     (model.capInfo || []).forEach(function (c) {
