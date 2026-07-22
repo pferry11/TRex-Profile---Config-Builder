@@ -193,9 +193,11 @@
         '<li><strong>Flow stats</strong> - add per-stream counters or latency measurement via pg_id.</li></ol>' +
         '<h4>Tunables</h4><p>Add a tunable (e.g. <code>size</code>) and bind a field to it with the ⚙ selector: the ' +
         'generated profile then takes <code>-t size=128</code> style arguments at load time.</p>' +
-        '<h4>Pcap replay</h4><p>The <strong>Pcap replay</strong> box swaps the whole profile for ' +
+        '<h4>Replay a pcap instead (advanced)</h4><p>Under <em>Profile-wide settings</em>, the ' +
+        '<strong>Replay a pcap instead (advanced)</strong> box swaps the whole profile for ' +
         '<code>STLProfile.load_pcap</code>: TRex replays every packet of a capture, at its recorded timing or a fixed ' +
-        'IPG, looped N times. The generated profile keeps <code>-t ipg_usec=...,loop_count=...</code> overrides.</p>' +
+        'IPG, looped N times. The generated profile keeps <code>-t ipg_usec=...,loop_count=...</code> overrides. ' +
+        'STL profiles are stream-based by default; this is the rare escape hatch, so the stream list is ignored while it is on.</p>' +
         '<p class="man-note">Latency streams ignore the -m multiplier and each needs a unique pg_id - the builder warns ' +
         'about both.</p>' + fieldTable('stl');
     } },

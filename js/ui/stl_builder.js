@@ -82,7 +82,12 @@
         renderAll();
       });
 
-      /* ---------- layout skeleton ---------- */
+      /* ---------- layout skeleton ----------
+       * Two visually distinct regions so a collapsed setting bar never reads as
+       * a heading for the stream panes below:
+       *   1. "Profile-wide settings" group  - tunables + optional pcap replay
+       *   2. "Streams" work area            - list | editor | live output
+       * (Same restructure is planned for the ASTF tab in a later batch.) */
       var topbar = el('div', { class: 'builder-topbar' });
       var tunablesBox = el('div', { class: 'tunables-box' });
       var pcapBox = el('div', { class: 'tunables-box' });
@@ -90,8 +95,15 @@
       var editorPane = el('div', { class: 'pane pane-editor' });
       var outputPane = el('div', { class: 'pane pane-output' });
       container.appendChild(topbar);
-      container.appendChild(tunablesBox);
-      container.appendChild(pcapBox);
+      container.appendChild(el('div', { class: 'builder-group' }, [
+        el('div', { class: 'builder-group-title', text: 'Profile-wide settings' }),
+        tunablesBox, pcapBox
+      ]));
+      container.appendChild(el('div', { class: 'workarea-head' }, [
+        el('span', { class: 'workarea-title', text: 'Streams' }),
+        el('span', { class: 'workarea-hint',
+          text: 'the packet streams this profile sends — list, editor & live output' })
+      ]));
       container.appendChild(el('div', { class: 'builder-panes' }, [listPane, editorPane, outputPane]));
 
       function selected() {
@@ -289,14 +301,14 @@
             onChange: function (v) { r.loopCount = v === null ? 1 : v; regen(); } }));
         }
         body.appendChild(row);
-        pcapBox.appendChild(TB.ui.section('Pcap replay (STLProfile.load_pcap)' + (r.enabled ? ' — ACTIVE, stream list ignored' : ''),
+        pcapBox.appendChild(TB.ui.section('Replay a pcap instead (advanced)' + (r.enabled ? ' — ACTIVE, stream list ignored' : ''),
           body, r.enabled, TB.help.stl._sections.pcapReplay));
       }
 
       /* ---------- stream list ---------- */
       function renderList() {
         listPane.innerHTML = '';
-        listPane.appendChild(el('div', { class: 'pane-title', text: 'Streams' }));
+        listPane.appendChild(el('div', { class: 'pane-title', text: 'Stream list' }));
         model.streams.forEach(function (s, idx) {
           var row = el('div', {
             class: 'stream-item' + (s.id === selectedId ? ' active' : '') + (s.enabled ? '' : ' disabled'),

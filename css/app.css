@@ -101,6 +101,33 @@ body {
 .pane-output { background: #12161b; }
 .pane-title { font-weight: 600; margin-bottom: 8px; color: var(--text-dim); text-transform: uppercase; font-size: calc(11px * var(--font-scale) * var(--scale-labels)); letter-spacing: 0.06em; }
 
+/* Two clearly-separated regions above/below: the "Profile-wide settings" group
+   (tunables + pcap) and the "Streams" work-area banner. The accent-barred
+   banner reads as a region label, distinct from a collapsible .section-head. */
+.builder-group { border-bottom: 1px solid var(--border); padding: 6px 0 9px; }
+.builder-group-title {
+  padding: 2px 14px 0;
+  font-size: calc(11px * var(--font-scale) * var(--scale-labels));
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-dim); font-weight: 600;
+}
+.workarea-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 14px;
+  background: var(--bg-pane);
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+}
+.workarea-title {
+  font-weight: 700; color: var(--text);
+  font-size: calc(12px * var(--font-scale) * var(--scale-controls));
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.workarea-hint {
+  color: var(--text-dim); font-style: italic;
+  font-size: calc(11px * var(--font-scale) * var(--scale-labels));
+}
+
 /* ---------- stream list ---------- */
 .stream-item {
   display: flex;
