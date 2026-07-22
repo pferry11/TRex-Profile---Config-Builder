@@ -986,6 +986,15 @@ function astfContains(name, fixture, needles, expectWarnings) {
 astfGoldenTest('ASTF golden: pcap mode (http_simple-like)', fxAstfHttp, goldenAstfHttp, 'http_simple_like.py');
 astfGoldenTest('ASTF golden: rampup_sec (param_sch_rampup-like)', fxAstfRampup, goldenAstfRampup, 'rampup_like.py');
 
+test('ASTF distribution: ip_gen emits TRex-valid "random" (never "rand")', function () {
+  var m = JSON.parse(JSON.stringify(fxAstfHttp));
+  m.ipGen.client.distribution = 'random';
+  m.ipGen.server.distribution = 'random';
+  var c = agen(m, NOW).files[0].content;
+  var ok = c.indexOf('distribution="random"') !== -1 && !/distribution="rand"/.test(c);
+  return { pass: ok, detail: ok ? '' : 'dist lines: ' + JSON.stringify(c.match(/distribution="[^"]*"/g) || []) };
+});
+
 astfContains('ASTF program mode (http_manual_commands-like)', fxAstfProgram, [
   'prog_c = ASTFProgram()',
   'prog_c.send(http_req)',
@@ -2510,6 +2519,8 @@ var TEST_DOCS = {
     'The baseline ASTF profile: one replayed pcap with ip generator pools, matching the shipped astf/http_simple.py. Full-file golden.',
   'ASTF golden: rampup_sec (param_sch_rampup-like)':
     'ASTFGlobalInfo scheduler ramp-up on the client side, matching astf/param_ipv6.py-style global-info emission. Full-file golden.',
+  'ASTF distribution: ip_gen emits TRex-valid "random" (never "rand")':
+    'Locks the v0.27.1 fix: the ip_gen distribution dropdown offered an invalid "rand" (TRex ASTFIPGenDist wants "seq"/"random"), and the generator emits the value verbatim. With distribution set to "random" the output carries distribution="random" and never the bad "rand" - the same correctness guard already in place for cap2.',
   'ASTF program mode (http_manual_commands-like)':
     'Structural check of a scripted HTTP exchange: client/server ASTFProgram command lists, payload variable pooling, and template/association wiring, per the shipped http_manual_commands.py.',
   'ASTF program loop (http_manual_commands_loop-like)':

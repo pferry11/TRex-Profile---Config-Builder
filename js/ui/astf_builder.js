@@ -220,16 +220,36 @@
 
       TB.ui.ensurePcapDatalist();
 
+      /* Two visually distinct regions (same restructure as the STL tab) so a
+       * collapsed setting bar never reads as a heading for the panes below:
+       *   1. "Profile-wide settings" group - L7 presets + GTP-U topology
+       *   2. the traffic work area          - list | profile editor | output  */
       var topbar = el('div', { class: 'builder-topbar' });
       var presetBox = el('div', { class: 'tunables-box' });
       var topoBox = el('div', { class: 'tunables-box' });
       var listPane = el('div', { class: 'pane pane-list' });
       var editorPane = el('div', { class: 'pane pane-editor' });
       var outputPane = el('div', { class: 'pane pane-output' });
+      var workHead = el('div', { class: 'workarea-head' }, [
+        el('span', { class: 'workarea-title', text: 'Templates' }),
+        el('span', { class: 'workarea-hint', text: '' })
+      ]);
       container.appendChild(topbar);
-      container.appendChild(presetBox);
-      container.appendChild(topoBox);
+      container.appendChild(el('div', { class: 'builder-group' }, [
+        el('div', { class: 'builder-group-title', text: 'Profile-wide settings' }),
+        presetBox, topoBox
+      ]));
+      container.appendChild(workHead);
       container.appendChild(el('div', { class: 'builder-panes' }, [listPane, editorPane, outputPane]));
+
+      /* keep the work-area banner in step with the pcap/program mode */
+      function updateWorkHead() {
+        var isPcap = model.mode === 'pcap';
+        workHead.firstChild.textContent = isPcap ? 'Pcap entries' : 'Templates';
+        workHead.lastChild.textContent = isPcap
+          ? 'the pcap-replay entries this profile runs — list, editor & live output'
+          : 'the send/recv templates this profile runs — list, editor & live output';
+      }
 
       function renderPresets() {
         presetBox.innerHTML = '';
@@ -408,8 +428,9 @@
       /* ---------- left pane: cap entries or templates ---------- */
       function renderList() {
         listPane.innerHTML = '';
+        updateWorkHead();
         var isPcap = model.mode === 'pcap';
-        listPane.appendChild(el('div', { class: 'pane-title', text: isPcap ? 'Pcap entries' : 'Templates' }));
+        listPane.appendChild(el('div', { class: 'pane-title', text: isPcap ? 'Pcap list' : 'Template list' }));
         items().forEach(function (it, idx) {
           var title = isPcap
             ? (it.file || '').split('/').pop()
@@ -465,7 +486,7 @@
           validate: function (v) { return TB.util.isIpv4(v) ? null : 'invalid IPv4'; },
           onChange: function (v) { side.end = v || ''; regen(); } }));
         box.appendChild(field({ label: 'distribution', tip: TB.help.astf.distribution, type: 'select', value: side.distribution,
-          options: [{ value: 'seq' }, { value: 'rand' }],
+          options: [{ value: 'seq' }, { value: 'random' }],
           onChange: function (v) { side.distribution = v; regen(); } }));
         box.appendChild(field({ label: 'per-core', tip: TB.help.astf.perCore, type: 'select', value: side.perCore || '',
           options: [{ value: '', label: '(default)' }, { value: 'seq', label: 'seq' }],
