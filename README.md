@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.27.5** · Target: TRex v3.06
+**App version 0.27.6** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -62,9 +62,11 @@ made in the tool round-trips byte-identically (ip generator, per-side TCP tuning
 the payload pool, program command lists, and the template wiring all come back).
 Hand-written ASTF now maps best-effort offline too — the shipped files are mostly
 structurally close to the tool's own output, so the parser recovers ip generator,
-global-info, pcap lists and program templates from most of them; profiles that
-compute values from argparse tunables need the execute-not-parse resolver, which
-is the remaining step (the tag scheme and coverage report are already shared).
+global-info, pcap lists and program templates from most of them. And — exactly
+like STL — with the Flask backend up, **Open profile…** *executes* the profile
+server-side, so profiles that compute values from argparse tunables, conditionals
+or loops load faithfully too. Re-import for every profile format (cap2, STL, ASTF)
+is now in place.
 
 ## Run it
 
@@ -80,12 +82,13 @@ TREX_DIR=/opt/trex/v3.06 python app.py     # then browse to http://<box>:8080
 
 With the backend up, pcap path fields gain a **Browse…** button (lists real
 pcaps under `TREX_DIR`), STL/ASTF outputs gain **Validate on server** (runs
-`stl-sim` / `astf-sim` and shows the result inline), and the STL tab's **Open
-profile…** switches to a **server resolver** that *executes* the profile
-(`POST /api/import_profile` → `tools/stl_resolve.py`) instead of parsing it —
-so arbitrary hand-written Python (comprehensions, `__init__` tables,
-conditionals) loads faithfully. It falls back to the offline parser
-automatically when the backend is absent or can't resolve a file.
+`stl-sim` / `astf-sim` and shows the result inline), and the **STL** and **ASTF**
+tabs' **Open profile…** switches to a **server resolver** that *executes* the
+profile (`POST /api/import_profile` → `tools/stl_resolve.py` / `tools/astf_resolve.py`)
+instead of parsing it — so arbitrary hand-written Python (comprehensions,
+`__init__` tables, argparse tunables, conditionals, loops) loads faithfully. It
+falls back to the offline parser automatically when the backend is absent or
+can't resolve a file.
 
 ## Tests
 
@@ -130,7 +133,13 @@ generators (103 tests). No toolchain needed.
   shipped ASTF files are largely structural — as of v0.27.5 (A3b) it fully maps
   **65 of 98** shipped files and partially maps most of the rest. The ~33 it can't
   fully map compute values from argparse tunables / conditionals, which is what the
-  execute-not-parse resolver (phase A3c) will close.
+  execute-not-parse resolver closes.
+- `python tools/astf_resolve.py <profile.py>` is that resolver (v0.27.6, A3c): the
+  ASTF counterpart of `stl_resolve.py`, it executes the profile against recording
+  stand-ins for the ASTF API (+ real scapy) and prints an editable builder model.
+  It resolves **85 of 98** shipped files — the tunable/conditional ones included;
+  the remaining handful have no `register()` or use exotic API surface. Wired at
+  `POST /api/import_profile` (kind `astf`), with the STL resolver.
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is

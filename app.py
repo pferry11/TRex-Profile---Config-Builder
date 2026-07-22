@@ -29,7 +29,9 @@ TREX_DIR = os.environ.get('TREX_DIR', '/opt/trex/v3.06')
 HOST = os.environ.get('TREXB_HOST', '127.0.0.1')
 PORT = int(os.environ.get('TREXB_PORT', '8080'))
 SIM_TIMEOUT_SEC = 30
-RESOLVE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools', 'stl_resolve.py')
+_TOOLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools')
+RESOLVERS = {'stl': os.path.join(_TOOLS, 'stl_resolve.py'),
+             'astf': os.path.join(_TOOLS, 'astf_resolve.py')}
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -105,17 +107,18 @@ def validate():
 
 @app.route('/api/import_profile', methods=['POST'])
 def import_profile():
-    """Resolve an STL .py profile into an editable builder model by EXECUTING it
-    (tools/stl_resolve.py) - handling arbitrary Python the offline parser can't.
+    """Resolve an STL or ASTF .py profile into an editable builder model by
+    EXECUTING it (tools/stl_resolve.py / tools/astf_resolve.py) - handling
+    arbitrary Python the offline parser can't.
 
     Runs in a subprocess with a timeout, the same trust model as /api/validate
-    (which already executes profiles via stl-sim). Only STL is supported today.
+    (which already executes profiles via stl-sim/astf-sim).
     """
     data = request.get_json(silent=True) or {}
     kind = data.get('kind')
     content = data.get('content')
-    if kind != 'stl':
-        return jsonify(ok=False, error='server resolve currently supports kind "stl" only'), 400
+    if kind not in RESOLVERS:
+        return jsonify(ok=False, error='server resolve supports kind "stl" or "astf"'), 400
     if not isinstance(content, str) or not content.strip():
         return jsonify(ok=False, error='content (profile source text) is required'), 400
 
@@ -123,7 +126,7 @@ def import_profile():
     try:
         with os.fdopen(fd, 'w') as f:
             f.write(content)
-        cmd = [sys.executable, RESOLVE_SCRIPT, tmp]
+        cmd = [sys.executable, RESOLVERS[kind], tmp]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=SIM_TIMEOUT_SEC)
         except subprocess.TimeoutExpired:

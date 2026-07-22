@@ -443,12 +443,42 @@
          this tool made maps fully; hand-written Python is best-effort and the
          coverage is reported. Same pattern as the STL/cap2 builders. */
       function importArtifact(text, filename) {
-        var res = TB.imp.parse(text, { kind: 'astf' });
-        if (!res.ok) { TB.ui.toast(res.error, 'err'); return; }
         var base = (filename || '').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-        if (base) { res.model.meta.name = base; }
-        loadModel(res.model);
-        reportImport(res, filename);
+
+        /* offline structural parse (always available, file:// included) */
+        function offline() {
+          var res = TB.imp.parse(text, { kind: 'astf' });
+          if (!res.ok) { TB.ui.toast(res.error, 'err'); return; }
+          if (base) { res.model.meta.name = base; }
+          loadModel(res.model);
+          reportImport(res, filename);
+        }
+
+        /* When the backend is up, prefer the server resolver: it EXECUTES the
+           profile (execute-not-parse), so it handles argparse tunables,
+           conditionals and loops the offline parser can't. Falls back offline. */
+        if (TB.backend && TB.backend.available && TB.backend.importProfile) {
+          TB.backend.importProfile('astf', text).then(function (r) {
+            if (!r || !r.ok || !r.model) {
+              TB.ui.toast('Server couldn\'t resolve "' + filename + '"' +
+                (r && r.error ? ' (' + r.error + ')' : '') + ' - parsing offline instead.', 'warn');
+              offline();
+              return;
+            }
+            if (base) { r.model.meta.name = base; }
+            loadModel(r.model);
+            var n = r.model.mode === 'pcap' ? r.model.capList.length : r.model.templates.length;
+            var what = r.model.mode === 'pcap'
+              ? n + ' pcap entr' + (n === 1 ? 'y' : 'ies')
+              : n + ' template' + (n === 1 ? '' : 's');
+            TB.ui.toast('Resolved "' + filename + '" on the server - ' + what + ' executed.', 'ok');
+          }).catch(function (e) {
+            TB.ui.toast('Server resolve failed (' + e.message + ') - parsing offline instead.', 'warn');
+            offline();
+          });
+          return;
+        }
+        offline();
       }
 
       function reportImport(res, filename) {
