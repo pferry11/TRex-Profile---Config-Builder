@@ -427,7 +427,7 @@
 
   /* Decode the STLTX... mode call into stream.mode. */
   function decodeMode(body, mode) {
-    var m = /mode=(STLTXCont|STLTXSingleBurst|STLTXMultiBurst)\(([^)]*)\)/.exec(body);
+    var m = /mode\s*=\s*(STLTXCont|STLTXSingleBurst|STLTXMultiBurst)\s*\(([^)]*)\)/.exec(body);
     if (!m) { return; }
     mode.type = m[1] === 'STLTXCont' ? 'cont' : (m[1] === 'STLTXSingleBurst' ? 'single_burst' : 'multi_burst');
     var a = m[2];
@@ -462,6 +462,162 @@
       out.push(t);
     }
     return out;
+  }
+
+  /* ---- foreign (hand-written) STL best-effort ---------------------------
+   * Shipped STL profiles are arbitrary Python; we can only resolve the simple,
+   * common shapes: one or more STLStream(...) calls whose packet/vm are built
+   * from local `base_pkt = ...` / `pkt = STLPktBuilder(...)` / `vm = STLVM()` or
+   * `STLScVmRaw([...])` assignments. Anything we can't resolve statically (a
+   * packet built by a function call, a list comprehension) is preserved as a
+   * raw-scapy expression and reported partial. This never runs on our own files
+   * (they use create_stream_N and are handled above). ------------------- */
+
+  /* content between the '(' at openIdx and its matching ')', quote-aware */
+  function balanced(str, openIdx) {
+    var depth = 0, q = null;
+    for (var i = openIdx; i < str.length; i++) {
+      var c = str[i];
+      if (q) { if (c === q) { q = null; } continue; }
+      if (c === '"' || c === "'") { q = c; continue; }
+      if (c === '(' || c === '[') { depth++; }
+      else if (c === ')' || c === ']') { depth--; if (depth === 0) { return str.slice(openIdx + 1, i); } }
+    }
+    return null;
+  }
+  /* split top-level comma args (respecting nested brackets and quotes) */
+  function splitArgs(inner) {
+    var out = [], depth = 0, q = null, cur = '';
+    for (var i = 0; i < inner.length; i++) {
+      var c = inner[i];
+      if (q) { cur += c; if (c === q) { q = null; } continue; }
+      if (c === '"' || c === "'") { q = c; cur += c; continue; }
+      if (c === '(' || c === '[' || c === '{') { depth++; }
+      else if (c === ')' || c === ']' || c === '}') { depth--; }
+      if (c === ',' && depth === 0) { out.push(cur); cur = ''; } else { cur += c; }
+    }
+    if (cur.trim()) { out.push(cur); }
+    return out;
+  }
+  /* map of `key = value` from a top-level arg list */
+  function kwMap(inner) {
+    var map = {};
+    splitArgs(inner || '').forEach(function (piece) {
+      var m = /^\s*([A-Za-z_]\w*)\s*=\s*([\s\S]+)$/.exec(piece);
+      if (m) { map[m[1]] = m[2].trim(); }
+    });
+    return map;
+  }
+
+  /* low-level field engine: STLScVmRaw([ STLVmFlowVar, STLVmWrFlowVar,
+     STLVmFixIpv4, STLVmTupleGen ]) - the class-based equivalent of decodeVm. */
+  function decodeLowLevelVm(txt, vm) {
+    var writes = {}, m;
+    var wRe = /STLVmWrFlowVar\(([^)]*)\)/g;
+    while ((m = wRe.exec(txt))) {
+      var wn = kwStr(m[1], 'fv_name');
+      if (wn) { writes[wn] = { writeTo: kwAny(m[1], 'pkt_offset'), offsetFixup: kwNum(m[1], 'offset_fixup') }; }
+    }
+    var hasFix = /STLVmFixIpv4\(/.test(txt);
+    var tupleM = /STLVmTupleGen\(([^)]*)\)/.exec(txt);
+    var vRe = /STLVmFlowVar\(([^)]*)\)/g;
+    while ((m = vRe.exec(txt))) {
+      var a = m[1], nm = kwStr(a, 'name'), w = writes[nm] || {}, stepV = kwNum(a, 'step');
+      vm.vars.push({
+        name: nm, sizeBytes: kwNum(a, 'size') || 4, op: kwStr(a, 'op') || 'inc',
+        min: kwAny(a, 'min_value'), max: kwAny(a, 'max_value'), step: stepV === null ? 1 : stepV,
+        nextVar: kwStr(a, 'next_var'), splitToCores: /split_to_cores\s*=\s*False/.test(a) ? false : true,
+        writeTo: w.writeTo || 'IP.src', offsetFixup: (w.offsetFixup === undefined ? null : w.offsetFixup),
+        fixChecksum: hasFix && !tupleM
+      });
+    }
+    if (tupleM) {
+      var ta = tupleM[1], tname = kwStr(ta, 'name') || 'tuple';
+      var ipW = writes[tname + '.ip'] || {}, portW = writes[tname + '.port'] || {};
+      vm.tuple = {
+        name: tname, ipMin: kwStr(ta, 'ip_min') || '', ipMax: kwStr(ta, 'ip_max') || '',
+        portMin: kwNum(ta, 'port_min'), portMax: kwNum(ta, 'port_max'), limitFlows: kwNum(ta, 'limit_flows'),
+        writeIpTo: ipW.writeTo || 'IP.src', writePortTo: portW.writeTo || 'UDP.sport'
+      };
+    }
+  }
+
+  /* Extract a full `<name> = STLScVmRaw(...)` (possibly multi-line) from text. */
+  function grabAssignedCall(text, callName) {
+    var re = new RegExp(callName + '\\s*\\(');
+    var m = re.exec(text);
+    if (!m) { return null; }
+    var open = m.index + m[0].length - 1;
+    return balanced(text, open);
+  }
+
+  function parseForeignStl(text, model, unmapped) {
+    /* single-line simple assignments: var -> rhs (last wins) */
+    var assign = {};
+    text.split(/\r?\n/).forEach(function (line) {
+      var m = /^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s*;?\s*$/.exec(line);
+      if (m) { assign[m[1]] = m[2]; }
+    });
+    var hasFluentVm = /\bvm\s*=\s*STLVM\(\)/.test(text);
+    var lowLevelVm = /STLScVmRaw\s*\(/.test(text) ? grabAssignedCall(text, 'STLScVmRaw') : null;
+
+    var found = [], idx = 0, marker = 'STLStream(';
+    while ((idx = text.indexOf(marker, idx)) !== -1) {
+      var open = idx + marker.length - 1;
+      var inner = balanced(text, open);
+      idx = open + (inner ? inner.length : 0) + 2;
+      if (inner != null) { found.push(inner); }
+    }
+    var mapped = 0;
+    found.forEach(function (inner) {
+      var kw = kwMap(inner);
+      var s = newStlStream('S' + model.streams.length);
+      if (kw.name) { s.name = unq(kw.name); }
+
+      /* resolve packet -> STLPktBuilder(pkt=<expr>, vm=<ref>) */
+      var builder = kw.packet;
+      if (builder && builder.indexOf('STLPktBuilder') === -1 && assign[builder.trim()]) { builder = assign[builder.trim()]; }
+      var pktExpr = null, vmRef = null;
+      if (builder && builder.indexOf('STLPktBuilder') !== -1) {
+        var bkw = kwMap(balanced(builder, builder.indexOf('(')) || '');
+        pktExpr = bkw.pkt; vmRef = bkw.vm;
+      }
+      if (pktExpr) {
+        var expr = pktExpr.replace(/\s*\/\s*pad\b/, '');          // drop /pad
+        if (expr !== pktExpr) { s.packet.payload.mode = 'pad'; }
+        expr = expr.replace(/\s*\/\s*\([^()]*\*[^()]*\)\s*$/, ''); // drop inline /(N*'x')
+        expr = expr.trim();
+        if (assign[expr]) { expr = assign[expr].trim(); }          // follow base_pkt var
+        if (!decodePacket(expr, s.packet)) {
+          s.packet.payload.rawScapy = expr;
+          unmapped.push('unresolved packet: ' + expr.slice(0, 80));
+        }
+      }
+
+      /* vm: inline STLScVmRaw, or a separately-assigned one, or fluent STLVM.
+         Non-inline vm is only attributed when this is the sole stream. */
+      if (vmRef && /STLScVmRaw/.test(vmRef)) {
+        decodeLowLevelVm(vmRef, s.vm);
+      } else if (vmRef && vmRef !== '[]' && found.length === 1) {
+        if (lowLevelVm) { decodeLowLevelVm(lowLevelVm, s.vm); }
+        else if (hasFluentVm) { decodeVm(text, s); }
+      }
+
+      decodeMode(inner, s.mode);
+      var isgM = /\bisg\s*=\s*([0-9.]+)/.exec(inner); if (isgM) { s.isgUsec = pv(isgM[1]); }
+      var nextM = /\bnext\s*=\s*(['"])([^'"]*)\1/.exec(inner); if (nextM) { s.chain.next = nextM[2]; }
+      if (/self_start\s*=\s*False/.test(inner)) { s.chain.selfStart = false; }
+      var acM = /action_count\s*=\s*(\d+)/.exec(inner); if (acM) { s.chain.actionCount = parseInt(acM[1], 10); }
+      var fsM = /flow_stats\s*=\s*(STLFlowStats|STLFlowLatencyStats)\s*\(\s*pg_id\s*=\s*([^)]+)\)/.exec(inner);
+      if (fsM) {
+        s.flowStats.type = fsM[1] === 'STLFlowLatencyStats' ? 'latency' : 'stats';
+        s.flowStats.addPortId = /\+\s*port_id/.test(fsM[2]);
+        s.flowStats.pgId = parseInt(fsM[2], 10);
+      }
+      model.streams.push(s);
+      mapped++;
+    });
+    return mapped;
   }
 
   TB.imp.parsers.stl = function (text) {
@@ -540,9 +696,18 @@
       mapped += 1; total += 1;
     }
 
-    /* coverage: count code lines we did not consume as unmapped (a tool file
-       leaves none; foreign Python surfaces here so the modal can report it) */
-    var SKIP = /^(from |import |class STLGenProfile|def create_stream_|def get_streams|def register|return STLGenProfile\(\)|return \[|\]|self\.create_stream_|parser =|parser\.add_argument|args = parser|formatter_class=|base_pkt|pad =|# UNVALIDATED|vm = STLVM|vm\.|return STLStream|name=|packet=STLPktBuilder|mode=|isg=|flow_stats=|next=|self_start=|action_count=|STLProfile\.load_pcap|# )/;
+    /* foreign fallback: no create_stream_N blocks means this file wasn't
+       generated by us - best-effort extraction of the common hand-written
+       shapes (comments stripped first so they can't break paren matching). */
+    if (!model.streams.length) {
+      var fn = parseForeignStl(text.replace(/#[^\n]*/g, ''), model, unmapped);
+      mapped += fn; total += fn;
+    }
+
+    /* coverage: count code lines we did not consume as unmapped. A tool file
+       leaves none; for foreign Python the structural boilerplate is skipped and
+       the real gaps (unresolved packets) are pushed to unmapped above. */
+    var SKIP = /^(from |import |class |def |return|self\.|parser|args =|formatter_class=|base_pkt|pad =|size|pkt|vm|t ?=|t ?\[|STL|Ether|IP|IPv6|UDP|TCP|Dot1|MPLS|NSH|GRE|VXLAN|name ?=|packet|mode|isg|flow_stats|next|self_start|action_count|"""|'''|[)\]},])/;
     String(text).split(/\r?\n/).forEach(function (raw) {
       var t = raw.trim();
       if (!t || t.charAt(0) === '#') { return; }

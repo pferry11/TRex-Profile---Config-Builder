@@ -695,6 +695,51 @@ test('STL .py re-import: a file with no tag parses best-effort (source=foreign)'
   return { pass: ok, detail: ok ? '' : 'source=' + (res && res.source) + ' streams=' + (res && res.model && res.model.streams.length) };
 });
 
+test('STL .py re-import (foreign 3b): hand-written single stream with fluent STLVM maps best-effort', function () {
+  var src = [
+    'from trex_stl_lib.api import *',
+    'class STLS1(object):',
+    '    def create_stream (self):',
+    '        base_pkt  = Ether()/IP(dst="48.0.0.1")/TCP(dport=80,flags="S")',
+    '        vm = STLVM()',
+    '        vm.var(name = "ip_src", min_value = "16.0.0.0", max_value = "18.0.0.254", size = 4, op = "random")',
+    '        vm.write(fv_name = "ip_src", pkt_offset = "IP.src")',
+    '        vm.fix_chksum()',
+    '        pkt = STLPktBuilder(pkt = base_pkt, vm = vm)',
+    '        return STLStream(packet = pkt, mode = STLTXCont())',
+    'def register():',
+    '    return STLS1()'
+  ].join('\n');
+  var res = TB.imp.parse(src, { kind: 'stl' });
+  if (!res.ok) { return { pass: false, detail: 'parse failed - ' + res.error }; }
+  var s = res.model.streams[0];
+  var ok = res.source === 'foreign' && res.model.streams.length === 1 &&
+    s.packet.l3.dst === '48.0.0.1' && s.packet.l4.type === 'tcp' && s.packet.l4.tcpFlags === 'S' &&
+    s.vm.vars.length === 1 && s.vm.vars[0].op === 'random' && s.vm.vars[0].writeTo === 'IP.src';
+  return { pass: ok, detail: ok ? '' : JSON.stringify({ src: res.source, n: res.model.streams.length, l3: s.packet.l3, l4: s.packet.l4, vm: s.vm.vars }) };
+});
+
+test('STL .py re-import (foreign 3b): multi-stream STLProfile([...]) list maps each stream', function () {
+  var src = [
+    'from trex_stl_lib.api import *',
+    'class STLS1(object):',
+    '    def create_stream (self):',
+    '        base_pkt =  Ether()/IP(src="16.0.0.1",dst="48.0.0.1")/UDP(dport=12,sport=1025)',
+    '        base_pkt1 =  Ether()/IP(src="16.0.0.2",dst="48.0.0.1")/UDP(dport=12,sport=1025)',
+    '        pad = max(0, 60 - len(base_pkt)) * "x"',
+    '        return STLProfile( [ STLStream( isg = 1.0, packet = STLPktBuilder(pkt = base_pkt/pad), mode = STLTXCont( pps = 10)),',
+    '                             STLStream( isg = 2.0, packet = STLPktBuilder(pkt = base_pkt1/pad), mode = STLTXCont( pps = 20)) ]).get_streams()',
+    'def register():',
+    '    return STLS1()'
+  ].join('\n');
+  var res = TB.imp.parse(src, { kind: 'stl' });
+  if (!res.ok) { return { pass: false, detail: 'parse failed - ' + res.error }; }
+  var st = res.model.streams;
+  var ok = st.length === 2 && st[0].packet.l3.src === '16.0.0.1' && st[1].packet.l3.src === '16.0.0.2' &&
+    st[0].mode.pps === 10 && st[1].mode.pps === 20 && st[0].isgUsec === 1 && st[1].isgUsec === 2;
+  return { pass: ok, detail: ok ? '' : JSON.stringify(st.map(function (s) { return { src: s.packet.l3.src, pps: s.mode.pps, isg: s.isgUsec }; })) };
+});
+
 test('warning: frame size below 60 bytes', function () {
   var m = JSON.parse(JSON.stringify(fxMinimal));
   m.tunables = [];
@@ -2441,6 +2486,10 @@ var TEST_DOCS = {
     'Edits the source IP directly in a generated .py body and re-imports: the model returns with the edited value, proving values are read from the body (not a stale embedded copy) - so a hand-tweaked IP or rate in a generated profile survives the round-trip.',
   'STL .py re-import: a file with no tag parses best-effort (source=foreign)':
     'Strips the "# trexb:" tag from a generated file and re-imports: the parser still recovers the stream and reports source=foreign, demonstrating the best-effort path for hand-written profiles that carry no self-describing tag.',
+  'STL .py re-import (foreign 3b): hand-written single stream with fluent STLVM maps best-effort':
+    'The offline best-effort path (v0.26.4, sub-batch 3b) over the hand-written shapes shipped in v3.06/stl: a create_stream method (no index) with a separate base_pkt assignment, a fluent STLVM() var/write/fix_chksum, and STLStream(packet=pkt, mode=...) with whitespace around =. The parser follows the local assignments, decodes the TCP packet (dst/flags) and the random src-IP var - proving the foreign extractor handles the common single-stream idiom, not just the tool\'s own output shape.',
+  'STL .py re-import (foreign 3b): multi-stream STLProfile([...]) list maps each stream':
+    'The other common shipped shape: several STLStream(...) built inline inside STLProfile([...]).get_streams(), each referencing a different base_pkt variable (simple_3st.py pattern). Balanced-paren extraction pulls out each stream and the assignment-following resolves its own packet, per-stream isg and pps - so a multi-stream hand-written profile loads with every stream distinct.',
   'warning: frame size below 60 bytes':
     'Frame sizes under 60 B are rejected or padded by most NICs; the generator must say so.',
   'warning: duplicate latency pg_id':

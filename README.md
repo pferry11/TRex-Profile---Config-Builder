@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.26.3** · Target: TRex v3.06
+**App version 0.26.4** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -52,8 +52,11 @@ interpreter and won't try to understand arbitrary scripts, so only tool-generate
 files are guaranteed to map fully. The **STL** tab now re-imports generated `.py`
 profiles the same way, via its own **Open profile…** action — a profile made in
 the tool round-trips byte-identically. Hand-written STL is arbitrary Python, so it
-maps best-effort (the realistic route to loading every shipped example is a
-backend Python resolver that executes rather than parses). ASTF `.py` re-import is
+maps best-effort: the parser follows the common shipped shapes (local
+`base_pkt`/`pkt`/`vm` assignments, fluent and low-level field engines, multi-stream
+`STLProfile([...])` lists), and preserves anything it can't resolve statically as a
+raw-scapy expression. The realistic route to loading *every* shipped example is a
+backend Python resolver that executes rather than parses. ASTF `.py` re-import is
 still on the roadmap; the tag scheme and coverage report are already shared.
 
 ## Run it
@@ -75,7 +78,7 @@ pcaps under `TREX_DIR`) and STL/ASTF outputs gain **Validate on server**
 ## Tests
 
 Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (96 tests). No toolchain needed.
+generators (98 tests). No toolchain needed.
 
 ## Notes
 
@@ -94,10 +97,14 @@ generators (96 tests). No toolchain needed.
   including the per-template named generator pools (`generator_clients`/
   `generator_servers`, per-template `client_pool`/`server_pool`, `track_ports`).
 - `node tools/stl_import_coverage.js` is the equivalent for STL `.py` (needs the
-  `v3.06/stl/` tree). Note the honest baseline: the **offline** parser maps our
-  own generated shape at 100% but ~0% of the shipped hand-written corpus, because
-  STL profiles are arbitrary Python, not declarative data — full corpus coverage
-  is a job for the backend Python resolver, not static parsing.
+  `v3.06/stl/` tree). The offline parser maps our own generated shape at 100%;
+  for the shipped hand-written corpus it is best-effort — as of v0.26.4 (3b) it
+  fully maps **22 of 106** files and partially extracts streams from most of the
+  rest (following `base_pkt`/`pkt`/`vm` assignments, the fluent `STLVM` and
+  low-level `STLScVmRaw` field engines, and multi-stream `STLProfile([...])`
+  lists). Packets built by a function call or comprehension can't be resolved
+  statically and are preserved as raw-scapy — full corpus coverage is a job for
+  the backend Python resolver (execute-not-parse), not static parsing.
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is
