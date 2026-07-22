@@ -1032,6 +1032,62 @@ test('ASTF .py re-import: generated fixtures reload to byte-identical output (so
   return { pass: true };
 });
 
+test('ASTF .py re-import (foreign 3b): hand-written pcap profile (http_simple-style) maps best-effort', function () {
+  var src = [
+    'from trex.astf.api import *',
+    'class Prof1():',
+    '    def get_profile(self, tunables, **kwargs):',
+    '        ip_gen_c = ASTFIPGenDist(ip_range=["16.0.0.0", "16.0.0.255"], distribution="seq")',
+    '        ip_gen_s = ASTFIPGenDist(ip_range=["48.0.0.0", "48.0.255.255"], distribution="seq")',
+    '        ip_gen = ASTFIPGen(glob=ASTFIPGenGlobal(ip_offset="1.0.0.0"),',
+    '                           dist_client=ip_gen_c,',
+    '                           dist_server=ip_gen_s)',
+    '        return ASTFProfile(default_ip_gen=ip_gen,',
+    '                            cap_list=[ASTFCapInfo(file="../avl/delay_10_http_browsing_0.pcap",',
+    '                            cps=2.776)])',
+    'def register():',
+    '    return Prof1()'
+  ].join('\n');
+  var res = TB.imp.parse(src, { kind: 'astf' });
+  if (!res.ok) { return { pass: false, detail: 'parse failed - ' + res.error }; }
+  var ok = res.source === 'foreign' && res.model.mode === 'pcap' && res.model.capList.length === 1 &&
+    res.model.capList[0].file === '../avl/delay_10_http_browsing_0.pcap' && res.model.capList[0].cps === 2.776 &&
+    res.model.ipGen.client.start === '16.0.0.0';
+  return { pass: ok, detail: ok ? '' : JSON.stringify({ src: res.source, mode: res.model.mode, caps: res.model.capList }) };
+});
+
+test('ASTF .py re-import (foreign 3b): hand-written program (templates=<var>, module payloads) maps best-effort', function () {
+  var src = [
+    'from trex.astf.api import *',
+    "http_req = b'GET / HTTP/1.1\\r\\n\\r\\n'",
+    "http_response = 'HTTP/1.1 200 OK\\r\\nContent-Length: 10\\r\\n\\r\\n0123456789'",
+    'class Prof1():',
+    '    def get_profile(self, tunables, **kwargs):',
+    '        prog_c = ASTFProgram()',
+    '        prog_c.send(http_req)',
+    '        prog_c.recv(len(http_response))',
+    '        prog_s = ASTFProgram()',
+    '        prog_s.recv(len(http_req))',
+    '        prog_s.send(http_response)',
+    '        ip_gen_c = ASTFIPGenDist(ip_range=["16.0.0.0", "16.0.0.255"], distribution="seq")',
+    '        ip_gen_s = ASTFIPGenDist(ip_range=["48.0.0.0", "48.0.255.255"], distribution="seq")',
+    '        ip_gen = ASTFIPGen(glob=ASTFIPGenGlobal(ip_offset="1.0.0.0"), dist_client=ip_gen_c, dist_server=ip_gen_s)',
+    '        temp_c = ASTFTCPClientTemplate(program=prog_c,ip_gen=ip_gen)',
+    '        temp_s = ASTFTCPServerTemplate(program=prog_s)',
+    '        template = ASTFTemplate(client_template=temp_c, server_template=temp_s)',
+    '        return ASTFProfile(default_ip_gen=ip_gen, templates=template)',
+    'def register():',
+    '    return Prof1()'
+  ].join('\n');
+  var res = TB.imp.parse(src, { kind: 'astf' });
+  if (!res.ok) { return { pass: false, detail: 'parse failed - ' + res.error }; }
+  var t = res.model.templates[0];
+  var ok = res.source === 'foreign' && res.model.mode === 'program' && res.model.templates.length === 1 &&
+    t.client.commands.length === 2 && t.client.commands[0].op === 'send' && t.client.commands[1].op === 'recv' &&
+    t.server.commands.length === 2 && t.server.commands[1].op === 'send';
+  return { pass: ok, detail: ok ? '' : JSON.stringify({ src: res.source, mode: res.model.mode, n: res.model.templates.length, t: t }) };
+});
+
 astfContains('ASTF program mode (http_manual_commands-like)', fxAstfProgram, [
   'prog_c = ASTFProgram()',
   'prog_c.send(http_req)',
@@ -2560,6 +2616,10 @@ var TEST_DOCS = {
     'Locks the v0.27.1 fix: the ip_gen distribution dropdown offered an invalid "rand" (TRex ASTFIPGenDist wants "seq"/"random"), and the generator emits the value verbatim. With distribution set to "random" the output carries distribution="random" and never the bad "rand" - the same correctness guard already in place for cap2.',
   'ASTF global-info: ip.tos/ip.ttl + tcp.no_delay_counter/delay_ack_msec emit and round-trip':
     'The v0.27.4 global-info coverage additions - the four ASTFGlobalInfo knobs the shipped param_ip_tos_ttl / param_tcp_delay_ack / param_no_delay_counter examples use that the builder previously could not set: ip.tos, ip.ttl, tcp.no_delay_counter and tcp.delay_ack_msec. The generator emits each c_glob_info line and the importer reads them straight back, so profiles using them round-trip.',
+  'ASTF .py re-import (foreign 3b): hand-written pcap profile (http_simple-style) maps best-effort':
+    'The offline best-effort path (v0.27.5, phase A3b) over the hand-written shapes shipped in v3.06/astf: a class with get_profile building an ASTFIPGen + cap_list of ASTFCapInfo, with no # trexb tag. The parser recovers the ip generator ranges and the pcap entry (file + cps) and reports source=foreign - proving the importer handles the shipped pcap-mode files, which are structurally close to our own output.',
+  'ASTF .py re-import (foreign 3b): hand-written program (templates=<var>, module payloads) maps best-effort':
+    'The program-mode foreign path: the shipped files write templates=<var> (a singular/plural variable, not the inline [list] the tool emits) and define payloads at module level with a b\'...\' bytes prefix. A3b loosens mode detection (templates= without brackets), resolves the template var, and reads the ASTFProgram send/recv command lists - so a hand-written program profile like http_manual_commands.py loads with both client and server programs intact.',
   'ASTF .py re-import: generated fixtures reload to byte-identical output (source=tool)':
     'The ASTF .py re-edit seam (v0.27.3, phase A3a): every generated fixture - pcap mode, rampup + global-info, HTTP program, two weighted template groups, UDP send_msg/recv_msg, a set_var/jmp loop, and the elephant-flow recv len(buf)*N - is parsed back with TB.imp.parse and regenerated. Byte-identical output proves the importer reverses the whole interconnected shape: ASTFIPGen ranges, per-side ASTFGlobalInfo TCP tuning, the payload variable pool, ASTFProgram command lists, and the ASTFTCPClient/ServerTemplate -> ASTFTemplate wiring - so an ASTF profile made in the tool reloads into the tool.',
   'ASTF program mode (http_manual_commands-like)':

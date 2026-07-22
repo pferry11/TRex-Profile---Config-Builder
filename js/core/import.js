@@ -805,7 +805,7 @@
     var respHeader = (TB.gen && TB.gen.astfHttpResponseHeader) || function () { return ''; };
     var map = {};
     text.split(/\r?\n/).forEach(function (raw) {
-      var m = /^\s*([A-Za-z_]\w*)\s*=\s*(('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")(\s*\+\s*\('\*'\s*\*\s*(\d+)\))?)\s*$/.exec(raw);
+      var m = /^\s*([A-Za-z_]\w*)\s*=\s*b?(('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")(\s*\+\s*\('\*'\s*\*\s*(\d+)\))?)\s*$/.exec(raw);
       if (!m) { return; }
       var strVal = pyStrValue(m[3]);
       if (m[5] !== undefined) {                       // '<header>' + ('*' * N) -> httpResponse
@@ -889,8 +889,12 @@
 
     var mainIpGen = parseIpGenBlock(text, '');
     if (mainIpGen) { model.ipGen = mainIpGen; counters.mapped++; counters.total++; }
-    parseGlobalsInto(text, 'c_glob_info', model.globals.client, counters);
-    parseGlobalsInto(text, 's_glob_info', model.globals.server, counters);
+    /* the global-info vars are ours (c_glob_info/s_glob_info) or a hand-written
+       name (default_c_glob_info=info / c_info / ...) - resolve from the profile. */
+    var cVarM = /default_c_glob_info\s*=\s*([A-Za-z_]\w*)/.exec(text);
+    var sVarM = /default_s_glob_info\s*=\s*([A-Za-z_]\w*)/.exec(text);
+    parseGlobalsInto(text, cVarM ? cVarM[1] : 'c_glob_info', model.globals.client, counters);
+    parseGlobalsInto(text, sVarM ? sVarM[1] : 's_glob_info', model.globals.server, counters);
 
     function overrideFor(ipGenVar) {
       if (!ipGenVar || ipGenVar === 'ip_gen') { return null; }
@@ -898,7 +902,7 @@
       return parseIpGenBlock(text, sfx);
     }
 
-    if (/cap_list\s*=\s*\[/.test(text)) {
+    if (/\bcap_list\s*=/.test(text)) {
       model.mode = 'pcap';
       var capRe = /ASTFCapInfo\(([^)]*)\)/g, cm;
       while ((cm = capRe.exec(text))) {
@@ -910,7 +914,7 @@
         });
         counters.mapped++; counters.total++;
       }
-    } else if (/templates\s*=\s*\[/.test(text)) {
+    } else if (/\btemplates\s*=/.test(text)) {
       model.mode = 'program';
       var paymap = parseAstfPayloads(text);
       var progs = parseAstfPrograms(text, paymap);
@@ -958,7 +962,7 @@
     }
 
     /* coverage: surface body lines we did not consume (foreign files show gaps) */
-    var ASKIP = /^(from |import |class |def |return|parser|args =|formatter_class=|ip_gen|dist_|glob=|default_|cap_list|templates|c_glob_info|s_glob_info|prog_[cs]|temp_[cs]|template|ASTF|http_req|http_response|payload|\)|\]|,|#)/;
+    var ASKIP = /^(from |import |class |def |return|parser|args =|formatter_class=|ip_gen|dist_|glob=|default_|cap_list|templates|c_glob_info|s_glob_info|c_info|s_info|info|prog_[cs]|temp_[cs]|template|ASTF|http_req|http_response|payload|buf|pass|profile|self\.|cps|port|s_delay|file|"""|'''|[)\]},])/;
     text.split(/\r?\n/).forEach(function (raw) {
       var t = raw.trim();
       if (!t || t.charAt(0) === '#') { return; }

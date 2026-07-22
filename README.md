@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.27.4** · Target: TRex v3.06
+**App version 0.27.5** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -60,8 +60,11 @@ backend Python resolver that executes rather than parses. The **ASTF** tab now
 re-imports generated `.py` profiles too, via its own **Open profile…** — a profile
 made in the tool round-trips byte-identically (ip generator, per-side TCP tuning,
 the payload pool, program command lists, and the template wiring all come back).
-Hand-written ASTF is best-effort offline for now; its execute-not-parse resolver is
-the next step (the tag scheme and coverage report are already shared).
+Hand-written ASTF now maps best-effort offline too — the shipped files are mostly
+structurally close to the tool's own output, so the parser recovers ip generator,
+global-info, pcap lists and program templates from most of them; profiles that
+compute values from argparse tunables need the execute-not-parse resolver, which
+is the remaining step (the tag scheme and coverage report are already shared).
 
 ## Run it
 
@@ -87,7 +90,7 @@ automatically when the backend is absent or can't resolve a file.
 ## Tests
 
 Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (101 tests). No toolchain needed.
+generators (103 tests). No toolchain needed.
 
 ## Notes
 
@@ -123,9 +126,11 @@ generators (101 tests). No toolchain needed.
   a Linux network stack). It needs only scapy, not a full TRex install, and the
   Flask backend exposes it at `POST /api/import_profile`.
 - `node tools/astf_import_coverage.js` is the ASTF equivalent (needs `v3.06/astf/`).
-  As with STL, the offline parser round-trips our own generated shape 100% but maps
-  the shipped hand-written corpus only partially — the execute-not-parse resolver
-  (phase A3c) is what closes that gap.
+  The offline parser round-trips our own generated shape 100%, and — because the
+  shipped ASTF files are largely structural — as of v0.27.5 (A3b) it fully maps
+  **65 of 98** shipped files and partially maps most of the rest. The ~33 it can't
+  fully map compute values from argparse tunables / conditionals, which is what the
+  execute-not-parse resolver (phase A3c) will close.
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is
