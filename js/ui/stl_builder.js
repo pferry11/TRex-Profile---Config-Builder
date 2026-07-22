@@ -127,7 +127,15 @@
             }));
             return;
           }
-          TB.ui.output.render(outputPane, { result: gen(model), model: model, validateKind: 'stl' });
+          TB.ui.output.render(outputPane, { result: gen(model), model: model, validateKind: 'stl',
+            /* Re-open lives in the output pane (same pattern as cap2). "Open
+               builder file…" restores a .json builder file exactly; the sister
+               "Open profile…" (.py) action arrives with the STL .py importer in
+               a later batch, at which point onOpenProfile/profileAccept get set. */
+            onOpenBuilderFile: function (text) {
+              try { loadModel(JSON.parse(text)); }
+              catch (e) { TB.ui.toast('Not a valid builder file (.json): ' + e.message, 'err'); }
+            } });
         }, 120);
       }
 
@@ -191,23 +199,8 @@
           }
         }));
 
-        var fileInput = el('input', { type: 'file', accept: '.json' });
-        fileInput.style.display = 'none';
-        fileInput.addEventListener('change', function () {
-          var f = fileInput.files[0];
-          if (!f) { return; }
-          var reader = new FileReader();
-          reader.onload = function () {
-            try { loadModel(JSON.parse(reader.result)); }
-            catch (e) { TB.ui.toast('Not valid JSON: ' + e.message, 'err'); }
-          };
-          reader.readAsText(f);
-        });
-        actions.appendChild(fileInput);
-        actions.appendChild(el('button', {
-          class: 'btn btn-secondary', text: 'Import model',
-          onclick: function () { fileInput.click(); }
-        }));
+        /* Re-open moved to the output pane's "Open builder file…" / "Open
+           profile…" actions (same split as cap2) - no topbar Import button. */
         topbar.appendChild(actions);
       }
 

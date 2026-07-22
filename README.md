@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.26.1** · Target: TRex v3.06
+**App version 0.26.2** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
