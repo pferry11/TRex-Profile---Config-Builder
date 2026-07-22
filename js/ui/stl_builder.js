@@ -223,12 +223,46 @@
          A file this tool made maps fully; hand-written Python is best-effort and
          the coverage is reported. Same pattern as the cap2 builder. */
       function importArtifact(text, filename) {
-        var res = TB.imp.parse(text, { kind: 'stl' });
-        if (!res.ok) { TB.ui.toast(res.error, 'err'); return; }
         var base = (filename || '').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-        if (base) { res.model.meta.name = base; }
-        loadModel(res.model);
-        reportImport(res, filename);
+
+        /* offline structural parse (always available, file:// included) */
+        function offline() {
+          var res = TB.imp.parse(text, { kind: 'stl' });
+          if (!res.ok) { TB.ui.toast(res.error, 'err'); return; }
+          if (base) { res.model.meta.name = base; }
+          loadModel(res.model);
+          reportImport(res, filename);
+        }
+
+        /* When the backend is up, prefer the server resolver: it EXECUTES the
+           profile (execute-not-parse), so it handles arbitrary Python the
+           offline parser can't. Fall back to offline on any failure. */
+        if (TB.backend && TB.backend.available && TB.backend.importProfile) {
+          TB.backend.importProfile('stl', text).then(function (r) {
+            if (!r || !r.ok || !r.model) {
+              TB.ui.toast('Server couldn\'t resolve "' + filename + '"' +
+                (r && r.error ? ' (' + r.error + ')' : '') + ' - parsing offline instead.', 'warn');
+              offline();
+              return;
+            }
+            if (base) { r.model.meta.name = base; }
+            loadModel(r.model);
+            var msg;
+            if (r.model.pcapReplay && r.model.pcapReplay.enabled) {
+              msg = 'Resolved "' + filename + '" on the server - pcap-replay profile.';
+            } else {
+              var raw = r.rawPackets ? (', ' + r.rawPackets + ' packet' + (r.rawPackets === 1 ? '' : 's') + ' kept as raw scapy') : '';
+              msg = 'Resolved "' + filename + '" on the server - ' + r.resolved +
+                ' stream' + (r.resolved === 1 ? '' : 's') + ' executed' + raw + '.';
+            }
+            TB.ui.toast(msg, 'ok');
+          }).catch(function (e) {
+            TB.ui.toast('Server resolve failed (' + e.message + ') - parsing offline instead.', 'warn');
+            offline();
+          });
+          return;
+        }
+        offline();
       }
 
       function reportImport(res, filename) {

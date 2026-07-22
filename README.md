@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.26.4** · Target: TRex v3.06
+**App version 0.26.5** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -72,8 +72,13 @@ TREX_DIR=/opt/trex/v3.06 python app.py     # then browse to http://<box>:8080
 ```
 
 With the backend up, pcap path fields gain a **Browse…** button (lists real
-pcaps under `TREX_DIR`) and STL/ASTF outputs gain **Validate on server**
-(runs `stl-sim` / `astf-sim` and shows the result inline).
+pcaps under `TREX_DIR`), STL/ASTF outputs gain **Validate on server** (runs
+`stl-sim` / `astf-sim` and shows the result inline), and the STL tab's **Open
+profile…** switches to a **server resolver** that *executes* the profile
+(`POST /api/import_profile` → `tools/stl_resolve.py`) instead of parsing it —
+so arbitrary hand-written Python (comprehensions, `__init__` tables,
+conditionals) loads faithfully. It falls back to the offline parser
+automatically when the backend is absent or can't resolve a file.
 
 ## Tests
 
@@ -105,6 +110,14 @@ generators (98 tests). No toolchain needed.
   lists). Packets built by a function call or comprehension can't be resolved
   statically and are preserved as raw-scapy — full corpus coverage is a job for
   the backend Python resolver (execute-not-parse), not static parsing.
+- `python tools/stl_resolve.py <profile.py>` is that resolver (v0.26.5, 3c): it
+  *executes* the profile against a lightweight recording stand-in for the TRex
+  API plus real scapy, and prints an editable builder model. Because it runs the
+  profile the way TRex does, it handles the arbitrary Python the static parser
+  can't — over the shipped corpus it resolves **72 of 106** files (the 24 HLT-API
+  profiles use a different builder and fall back to offline; a few IPv6 files need
+  a Linux network stack). It needs only scapy, not a full TRex install, and the
+  Flask backend exposes it at `POST /api/import_profile`.
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is

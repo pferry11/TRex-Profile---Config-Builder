@@ -62,6 +62,22 @@
           return data;
         });
       });
+    },
+
+    /* Resolve a profile into a builder model by executing it server-side
+       (execute-not-parse; handles arbitrary Python the offline parser can't).
+       Resolves to { ok, engine, resolved, model, ... }. */
+    importProfile: function (kind, content) {
+      return root.fetch('/api/import_profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: kind, content: content })
+      }).then(function (r) {
+        return r.json().then(function (data) {
+          if (!r.ok) { throw new Error(data.error || ('HTTP ' + r.status)); }
+          return data;
+        });
+      });
     }
   };
 
