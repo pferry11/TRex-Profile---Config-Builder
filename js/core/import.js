@@ -221,4 +221,340 @@
              coverage: total ? mapped / total : 1,
              mapped: mapped, total: total, unmapped: unmapped };
   };
+
+  /* ---- STL (.py) structural parser --------------------------------------
+   * Reverses the deterministic output of js/gen/stl.js: an STLGenProfile class
+   * with create_stream_<n> methods (packet / vm / mode) and a get_streams
+   * argparse block - or a single load_pcap get_streams for pcap-replay mode.
+   * Values are read straight from the body, so hand-edits are honoured. A file
+   * this tool generated maps fully; arbitrary hand-written Python is best-effort
+   * (this parser reads the shapes we emit, it does not interpret Python).
+   * ---------------------------------------------------------------------- */
+
+  /* strip a matching pair of surrounding quotes, else return trimmed as-is */
+  function unq(s) {
+    s = String(s == null ? '' : s).trim();
+    if ((s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') ||
+        (s.charAt(0) === "'" && s.charAt(s.length - 1) === "'")) { return s.slice(1, -1); }
+    return s;
+  }
+  /* value of `key=<number>` inside an arg string, or null */
+  function kwNum(args, key) {
+    var m = new RegExp(key + '\\s*=\\s*(-?[0-9.]+)').exec(args);
+    return m ? pv(m[1]) : null;
+  }
+  /* value of `key="str"` (or 'str') inside an arg string, or null */
+  function kwStr(args, key) {
+    var m = new RegExp(key + '\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\')').exec(args);
+    return m ? unq(m[1]) : null;
+  }
+  /* value of `key=...` accepting a quoted string OR a bare token (number /
+     dotted offset like IP.src). Returns the unquoted text, or null. */
+  function kwAny(args, key) {
+    var m = new RegExp(key + '\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^,)]+)').exec(args);
+    return m ? unq(m[1]) : null;
+  }
+
+  function newStlStream(name) {
+    return {
+      id: 's_' + (name || 'S0') + '_' + Math.random().toString(36).slice(2, 7),
+      name: name || 'S0', enabled: true,
+      packet: {
+        l2: { srcMac: null, dstMac: null },
+        vlan: { enabled: false, id: 100, prio: 0 },
+        l3: { type: 'ipv4', src: '16.0.0.1', dst: '48.0.0.1', tos: null, ttl: null,
+              fragOffset: null, moreFrags: false, ext: 'none' },
+        l4: { type: 'udp', sport: 1025, dport: 12, tcpFlags: null,
+              icmpKind: 'echo-request', icmpId: null, icmpSeq: null },
+        tunnel: { type: 'none', outerSrc: '10.0.0.1', outerDst: '10.0.0.2', vni: 5000,
+                  label: 100, mplsTtl: null, outerVlanId: 100, spi: 42, si: 1 },
+        payload: { mode: 'pad', frameSize: 64, frameSizeTunable: null, fill: 'x', rawScapy: null }
+      },
+      mode: { type: 'cont', rateUnit: 'pps', pps: 100, totalPkts: 1000, pktsPerBurst: 4, ibgUsec: 1000000, count: 5 },
+      isgUsec: 0,
+      chain: { selfStart: true, next: null, actionCount: null },
+      vm: { cacheSize: null, vars: [], tuple: null },
+      flowStats: { type: 'none', pgId: null, addPortId: false }
+    };
+  }
+
+  /* split a scapy expression into its top-level "/" layers. Our emitted
+     expressions never contain "/" inside a layer's args, so a plain split is
+     safe (IPs use ".", IPv6 uses ":"). Returns [{name, args}]. */
+  function splitLayers(expr) {
+    return String(expr).split('/').map(function (tok) {
+      var m = /^\s*([A-Za-z0-9_]+)\s*\((.*)\)\s*$/.exec(tok.trim());
+      return m ? { name: m[1], args: m[2] } : { name: tok.trim(), args: '' };
+    });
+  }
+
+  /* Decode a structured base_pkt expression onto packet fields, in the exact
+     layer order js/gen/stl.js emits: Ether, [Dot1AD qinq], [Dot1Q vlan],
+     [tunnel], IP|IPv6, [ext], L4. Returns true if it looked structured. */
+  function decodePacket(expr, p) {
+    var L = splitLayers(expr);
+    var i = 0;
+    if (!L.length || L[0].name !== 'Ether') { return false; }
+    p.l2.srcMac = kwStr(L[0].args, 'src');
+    p.l2.dstMac = kwStr(L[0].args, 'dst');
+    i = 1;
+
+    if (L[i] && L[i].name === 'Dot1AD') {            // QinQ outer tag
+      p.tunnel.type = 'qinq';
+      var ov = kwNum(L[i].args, 'vlan'); if (ov !== null) { p.tunnel.outerVlanId = ov; }
+      i++;
+    }
+    if (L[i] && L[i].name === 'Dot1Q') {             // 802.1Q VLAN
+      p.vlan.enabled = true;
+      var vid = kwNum(L[i].args, 'vlan'); if (vid !== null) { p.vlan.id = vid; }
+      var pr = kwNum(L[i].args, 'prio'); p.vlan.prio = pr === null ? 0 : pr;
+      i++;
+    }
+    if (L[i] && L[i].name === 'MPLS') {
+      p.tunnel.type = 'mpls';
+      var lb = kwNum(L[i].args, 'label'); if (lb !== null) { p.tunnel.label = lb; }
+      p.tunnel.mplsTtl = kwNum(L[i].args, 'ttl');
+      i++;
+    } else if (L[i] && L[i].name === 'NSH') {
+      p.tunnel.type = 'nsh';
+      var spi = kwNum(L[i].args, 'spi'); if (spi !== null) { p.tunnel.spi = spi; }
+      var si = kwNum(L[i].args, 'si'); if (si !== null) { p.tunnel.si = si; }
+      i++;
+    } else if (L[i] && L[i].name === 'IP' && L[i + 1] && L[i + 1].name === 'GRE') {
+      p.tunnel.type = 'gre';
+      p.tunnel.outerSrc = kwStr(L[i].args, 'src') || p.tunnel.outerSrc;
+      p.tunnel.outerDst = kwStr(L[i].args, 'dst') || p.tunnel.outerDst;
+      i += 2;
+    } else if (L[i] && L[i].name === 'IP' && L[i + 1] && L[i + 1].name === 'UDP' &&
+               L[i + 2] && L[i + 2].name === 'VXLAN') {
+      p.tunnel.type = 'vxlan';
+      p.tunnel.outerSrc = kwStr(L[i].args, 'src') || p.tunnel.outerSrc;
+      p.tunnel.outerDst = kwStr(L[i].args, 'dst') || p.tunnel.outerDst;
+      var vni = kwNum(L[i + 2].args, 'vni'); if (vni !== null) { p.tunnel.vni = vni; }
+      i += 3;
+      if (L[i] && L[i].name === 'Ether') { i++; }   // inner Ether()
+    }
+
+    if (L[i] && L[i].name === 'IP') {
+      p.l3.type = 'ipv4';
+      p.l3.src = kwStr(L[i].args, 'src') || p.l3.src;
+      p.l3.dst = kwStr(L[i].args, 'dst') || p.l3.dst;
+      p.l3.tos = kwNum(L[i].args, 'tos');
+      p.l3.ttl = kwNum(L[i].args, 'ttl');
+      p.l3.moreFrags = /flags\s*=\s*"MF"/.test(L[i].args);
+      p.l3.fragOffset = kwNum(L[i].args, 'frag');
+      i++;
+    } else if (L[i] && L[i].name === 'IPv6') {
+      p.l3.type = 'ipv6';
+      p.l3.src = kwStr(L[i].args, 'src') || p.l3.src;
+      p.l3.dst = kwStr(L[i].args, 'dst') || p.l3.dst;
+      i++;
+      if (L[i] && L[i].name === 'IPv6ExtHdrHopByHop') { p.l3.ext = 'hbh'; i++; }
+      else if (L[i] && L[i].name === 'IPv6ExtHdrFragment') { p.l3.ext = 'frag'; i++; }
+    }
+
+    if (L[i] && L[i].name === 'UDP') {
+      p.l4.type = 'udp';
+      var ud = kwNum(L[i].args, 'dport'); if (ud !== null) { p.l4.dport = ud; }
+      var us = kwNum(L[i].args, 'sport'); if (us !== null) { p.l4.sport = us; }
+    } else if (L[i] && L[i].name === 'TCP') {
+      p.l4.type = 'tcp';
+      var td = kwNum(L[i].args, 'dport'); if (td !== null) { p.l4.dport = td; }
+      var ts = kwNum(L[i].args, 'sport'); if (ts !== null) { p.l4.sport = ts; }
+      p.l4.tcpFlags = kwStr(L[i].args, 'flags');
+    } else if (L[i] && (L[i].name === 'ICMP' || L[i].name === 'ICMPv6EchoRequest' || L[i].name === 'ICMPv6EchoReply')) {
+      p.l4.type = 'icmp';
+      if (L[i].name === 'ICMP') {
+        p.l4.icmpKind = kwNum(L[i].args, 'type') === 0 ? 'echo-reply' : 'echo-request';
+      } else {
+        p.l4.icmpKind = L[i].name === 'ICMPv6EchoReply' ? 'echo-reply' : 'echo-request';
+      }
+      p.l4.icmpId = kwNum(L[i].args, 'id');
+      p.l4.icmpSeq = kwNum(L[i].args, 'seq');
+    } else {
+      p.l4.type = 'none';
+    }
+    return true;
+  }
+
+  /* Reconstruct the field-engine (VM) from a stream block's body. */
+  function decodeVm(body, stream) {
+    var vm = stream.vm;
+    var m;
+    var writes = {};   // fv_name -> { pkt_offset, offset_fixup }
+    var wRe = /vm\.write\(([^)]*)\)/g;
+    while ((m = wRe.exec(body))) {
+      var wn = kwStr(m[1], 'fv_name');
+      if (wn) { writes[wn] = { writeTo: kwAny(m[1], 'pkt_offset'), offsetFixup: kwNum(m[1], 'offset_fixup') }; }
+    }
+    var hasFix = /vm\.fix_chksum\(\)/.test(body);
+    var tupleM = /vm\.tuple_var\(([^)]*)\)/.exec(body);
+
+    var vRe = /vm\.var\(([^)]*)\)/g;
+    while ((m = vRe.exec(body))) {
+      var a = m[1];
+      var nm = kwStr(a, 'name');
+      var w = writes[nm] || {};
+      var stepV = kwNum(a, 'step');
+      vm.vars.push({
+        name: nm, sizeBytes: kwNum(a, 'size') || 4, op: kwStr(a, 'op') || 'inc',
+        min: kwAny(a, 'min_value'), max: kwAny(a, 'max_value'),
+        step: stepV === null ? 1 : stepV,
+        nextVar: kwStr(a, 'next_var'),
+        splitToCores: /split_to_cores\s*=\s*False/.test(a) ? false : true,
+        writeTo: w.writeTo || 'IP.src', offsetFixup: (w.offsetFixup === undefined ? null : w.offsetFixup),
+        /* the generator emits a single fix_chksum() when ANY var wants it or a
+           tuple is present; with no tuple, attribute it to the vars. */
+        fixChecksum: hasFix && !tupleM
+      });
+    }
+
+    if (tupleM) {
+      var ta = tupleM[1];
+      var tname = kwStr(ta, 'name') || 'tuple';
+      var ipW = writes[tname + '.ip'] || {};
+      var portW = writes[tname + '.port'] || {};
+      vm.tuple = {
+        name: tname, ipMin: kwStr(ta, 'ip_min') || '', ipMax: kwStr(ta, 'ip_max') || '',
+        portMin: kwNum(ta, 'port_min'), portMax: kwNum(ta, 'port_max'),
+        limitFlows: kwNum(ta, 'limit_flows'),
+        writeIpTo: ipW.writeTo || 'IP.src', writePortTo: portW.writeTo || 'UDP.sport'
+      };
+    }
+    var cached = /vm\.set_cached\((\d+)\)/.exec(body);
+    if (cached) { vm.cacheSize = parseInt(cached[1], 10); }
+  }
+
+  /* Decode the STLTX... mode call into stream.mode. */
+  function decodeMode(body, mode) {
+    var m = /mode=(STLTXCont|STLTXSingleBurst|STLTXMultiBurst)\(([^)]*)\)/.exec(body);
+    if (!m) { return; }
+    mode.type = m[1] === 'STLTXCont' ? 'cont' : (m[1] === 'STLTXSingleBurst' ? 'single_burst' : 'multi_burst');
+    var a = m[2];
+    var units = ['pps', 'bps_L1', 'bps_L2', 'percentage'];
+    for (var i = 0; i < units.length; i++) {
+      var rv = kwNum(a, units[i]);
+      if (rv !== null) { mode.rateUnit = units[i]; mode.pps = rv; break; }
+    }
+    var tp = kwNum(a, 'total_pkts'); if (tp !== null) { mode.totalPkts = tp; }
+    var ppb = kwNum(a, 'pkts_per_burst'); if (ppb !== null) { mode.pktsPerBurst = ppb; }
+    var ibg = kwNum(a, 'ibg'); if (ibg !== null) { mode.ibgUsec = ibg; }
+    var cnt = kwNum(a, 'count'); if (cnt !== null) { mode.count = cnt; }
+  }
+
+  /* argparse tunables -> [{name, type, default, help, choices?}] */
+  function decodeTunables(text) {
+    var out = [];
+    var re = /parser\.add_argument\('--(\w+)',\s*type=(int|float|str)(?:,\s*choices=\[([^\]]*)\])?,\s*default=(.+?),\s*help=('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")\)/g;
+    var m;
+    while ((m = re.exec(text))) {
+      var name = m[1], pyType = m[2], choicesRaw = m[3], def = m[4].trim(), help = unq(m[5]);
+      /* the two pcap-replay knobs are not user tunables */
+      if (name === 'ipg_usec' || name === 'loop_count') { continue; }
+      var t = { name: name, help: help };
+      if (choicesRaw !== undefined) {
+        t.type = 'choice';
+        t.choices = choicesRaw.split(',').map(function (c) { return unq(c); }).filter(function (c) { return c !== ''; });
+        t.default = unq(def);
+      } else if (pyType === 'int') { t.type = 'int'; t.default = parseInt(def, 10); }
+      else if (pyType === 'float') { t.type = 'float'; t.default = parseFloat(def); }
+      else { t.type = 'str'; t.default = unq(def); }
+      out.push(t);
+    }
+    return out;
+  }
+
+  TB.imp.parsers.stl = function (text) {
+    text = String(text);
+    var model = {
+      kind: 'stl', schemaVersion: 1, trexVersion: '3.06',
+      meta: { name: 'imported_stl_profile', description: '', modified: '' },
+      tunables: [],
+      pcapReplay: { enabled: false, file: 'cap2/dns.pcap', ipgUsec: 10, loopCount: 5, speedup: 1 },
+      streams: []
+    };
+    var nameM = /#\s*Re-edit:\s*load\s+(.+?)\.trexb\.json/.exec(text);
+    if (nameM) { model.meta.name = nameM[1]; }
+
+    var mapped = 0, total = 0, unmapped = [];
+
+    /* ---- pcap-replay mode (STLProfile.load_pcap) ---- */
+    var pcapM = /STLProfile\.load_pcap\('([^']*)',\s*([^)]*)\)\.get_streams\(\)/.exec(text);
+    if (pcapM) {
+      var ipgM = /--ipg_usec',\s*type=float,\s*default=([^,]+),/.exec(text);
+      var loopM = /--loop_count',\s*type=int,\s*default=(\d+),/.exec(text);
+      var speedM = /speedup=([0-9.]+)/.exec(pcapM[2]);
+      model.pcapReplay = {
+        enabled: true, file: pcapM[1],
+        ipgUsec: (ipgM && /None/.test(ipgM[1])) ? null : (ipgM ? pv(ipgM[1].trim()) : 10),
+        loopCount: loopM ? parseInt(loopM[1], 10) : 5,
+        speedup: speedM ? pv(speedM[1]) : 1
+      };
+      mapped += 1; total += 1;
+      return { ok: true, model: model, coverage: 1, mapped: mapped, total: total, unmapped: unmapped };
+    }
+
+    /* ---- stream mode ---- */
+    model.tunables = decodeTunables(text);
+    if (model.tunables.length) { mapped += model.tunables.length; total += model.tunables.length; }
+
+    var blockRe = /def create_stream_(\d+)\s*\(self, args[^)]*\):([\s\S]*?)(?=\n {4}def |\ndef |$)/g;
+    var bm;
+    while ((bm = blockRe.exec(text))) {
+      var body = bm[2];
+      var nm = /name='([^']*)'/.exec(body);
+      var s = newStlStream(nm ? nm[1] : 'S' + bm[1]);
+
+      var raw = /# UNVALIDATED raw scapy expression/.test(body);
+      var pktM = /base_pkt\s*=\s*(.+)/.exec(body);
+      if (pktM) {
+        if (raw) { s.packet.payload.rawScapy = pktM[1].trim(); }
+        else if (!decodePacket(pktM[1].trim(), s.packet)) { s.packet.payload.rawScapy = pktM[1].trim(); }
+      }
+      var padM = /pad\s*=\s*max\(0,\s*(.+?)\s*-\s*len\(base_pkt\)\)\s*\*\s*'([^']*)'/.exec(body);
+      if (padM) {
+        s.packet.payload.mode = 'pad';
+        if (/^args\./.test(padM[1])) { s.packet.payload.frameSizeTunable = padM[1].replace(/^args\./, ''); }
+        else { s.packet.payload.frameSize = pv(padM[1]); }
+        s.packet.payload.fill = padM[2] ? padM[2].charAt(0) : 'x';
+      }
+
+      decodeVm(body, s);
+      decodeMode(body, s.mode);
+
+      var isgM = /\bisg=([0-9.]+)/.exec(body);
+      if (isgM) { s.isgUsec = pv(isgM[1]); }
+      var fsM = /flow_stats=(STLFlowStats|STLFlowLatencyStats)\(pg_id=([^)]+)\)/.exec(body);
+      if (fsM) {
+        s.flowStats.type = fsM[1] === 'STLFlowLatencyStats' ? 'latency' : 'stats';
+        s.flowStats.addPortId = /\+\s*port_id/.test(fsM[2]);
+        s.flowStats.pgId = parseInt(fsM[2], 10);
+      }
+      var nextM = /next='([^']*)'/.exec(body);
+      if (nextM) { s.chain.next = nextM[1]; }
+      if (/self_start=False/.test(body)) { s.chain.selfStart = false; }
+      var acM = /action_count=(\d+)/.exec(body);
+      if (acM) { s.chain.actionCount = parseInt(acM[1], 10); }
+
+      model.streams.push(s);
+      mapped += 1; total += 1;
+    }
+
+    /* coverage: count code lines we did not consume as unmapped (a tool file
+       leaves none; foreign Python surfaces here so the modal can report it) */
+    var SKIP = /^(from |import |class STLGenProfile|def create_stream_|def get_streams|def register|return STLGenProfile\(\)|return \[|\]|self\.create_stream_|parser =|parser\.add_argument|args = parser|formatter_class=|base_pkt|pad =|# UNVALIDATED|vm = STLVM|vm\.|return STLStream|name=|packet=STLPktBuilder|mode=|isg=|flow_stats=|next=|self_start=|action_count=|STLProfile\.load_pcap|# )/;
+    String(text).split(/\r?\n/).forEach(function (raw) {
+      var t = raw.trim();
+      if (!t || t.charAt(0) === '#') { return; }
+      if (SKIP.test(t)) { return; }
+      total += 1; unmapped.push(t);
+    });
+
+    if (!model.streams.length && !model.tunables.length) {
+      return { ok: false, error: 'Could not recognise any STL streams in this file.' };
+    }
+    return { ok: true, model: model,
+             coverage: total ? mapped / total : 1,
+             mapped: mapped, total: total, unmapped: unmapped };
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

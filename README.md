@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.26.2** · Target: TRex v3.06
+**App version 0.26.3** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -49,8 +49,12 @@ field map; it holds no values. A file this tool made maps fully; a hand-written
 or third-party `.yaml` with no tag is parsed best-effort, loading every key it
 recognizes and reporting how much of the file could be mapped. The app has no
 interpreter and won't try to understand arbitrary scripts, so only tool-generated
-files are guaranteed to map fully. (Re-import for the `.py` builders is on the
-roadmap; the tag scheme and coverage report are already shared.)
+files are guaranteed to map fully. The **STL** tab now re-imports generated `.py`
+profiles the same way, via its own **Open profile…** action — a profile made in
+the tool round-trips byte-identically. Hand-written STL is arbitrary Python, so it
+maps best-effort (the realistic route to loading every shipped example is a
+backend Python resolver that executes rather than parses). ASTF `.py` re-import is
+still on the roadmap; the tag scheme and coverage report are already shared.
 
 ## Run it
 
@@ -71,7 +75,7 @@ pcaps under `TREX_DIR`) and STL/ASTF outputs gain **Validate on server**
 ## Tests
 
 Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (93 tests). No toolchain needed.
+generators (96 tests). No toolchain needed.
 
 ## Notes
 
@@ -89,6 +93,11 @@ generators (93 tests). No toolchain needed.
   As of v0.25.0 all **67/67** shipped cap2/avl profiles round-trip at 100%,
   including the per-template named generator pools (`generator_clients`/
   `generator_servers`, per-template `client_pool`/`server_pool`, `track_ports`).
+- `node tools/stl_import_coverage.js` is the equivalent for STL `.py` (needs the
+  `v3.06/stl/` tree). Note the honest baseline: the **offline** parser maps our
+  own generated shape at 100% but ~0% of the shipped hand-written corpus, because
+  STL profiles are arbitrary Python, not declarative data — full corpus coverage
+  is a job for the backend Python resolver, not static parsing.
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is

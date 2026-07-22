@@ -278,7 +278,8 @@ var goldenMinimal = HDR('udp_simple', sumMinimal) +
 '        return [self.create_stream_1(args)]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 function imixStream(n, name, size, pps, isg) {
   return '\n    def create_stream_' + n + '(self, args):\n' +
@@ -316,7 +317,8 @@ imixStream(3, 'S2', 1514, 4, 0.2) +
 '        ]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var goldenChained = HDR('burst_chain', sumChained) +
 'from trex_stl_lib.api import *\n' +
@@ -353,7 +355,8 @@ var goldenChained = HDR('burst_chain', sumChained) +
 '        ]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var sumPacketLayers = [
   'S0: transmits continuously at 100 pps - 64-byte ICMP echo-request frames 16.0.0.1 -> 48.0.0.1.',
@@ -413,7 +416,8 @@ var goldenPacketLayers = HDR('packet_layers', sumPacketLayers) +
 '        ]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var sumTunnels = [
   'S0: transmits continuously at 100 pps - 150-byte UDP frames 16.0.0.1 -> 48.0.0.1, VXLAN vni 5000 via 10.0.0.1 -> 10.0.0.2.',
@@ -460,7 +464,8 @@ tunnelStream(5, 'S4', 'Ether()/NSH(spi=42,si=1)/IP(src="16.0.0.1",dst="48.0.0.1"
 '        ]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var sumVmDeps = [
   'S0: transmits continuously at 100 pps - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1; sweeps IP.src over 16.0.0.1-16.0.0.254 (steps ip_dst on wrap) (not split per core); sweeps IP.dst over 48.0.0.1-48.0.0.254.',
@@ -494,7 +499,8 @@ var goldenVmDeps = HDR('vm_deps', sumVmDeps) +
 '        return [self.create_stream_1(args)]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var sumPcapReplay = [
   'Replays cap2/dns.pcap as stateless streams at 10 usec between packets, looped 5 times.',
@@ -516,7 +522,8 @@ var goldenPcapReplay = HDR('pcap_replay', sumPcapReplay) +
 "        return STLProfile.load_pcap('cap2/dns.pcap', ipg_usec=args.ipg_usec, loop_count=args.loop_count).get_streams()\n" +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var sumRateUnits = [
   'S0: transmits continuously at 1000000 bps (L2) - 64-byte UDP frames 16.0.0.1 -> 48.0.0.1.',
@@ -556,7 +563,8 @@ var goldenRateUnits = HDR('rate_units', sumRateUnits) +
 '        ]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var goldenLatency = HDR('latency_stream', sumLatency) +
 'from trex_stl_lib.api import *\n' +
@@ -580,7 +588,8 @@ var goldenLatency = HDR('latency_stream', sumLatency) +
 '        return [self.create_stream_1(args, port_id)]\n' +
 '\n\n' +
 'def register():\n' +
-'    return STLGenProfile()\n';
+'    return STLGenProfile()\n' +
+'\n# trexb: stl schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 /* ---------------- test runner ---------------- */
 var tests = [];
@@ -650,6 +659,40 @@ test('round-trip: model -> JSON -> parse -> regenerate identical', function () {
   var once = gen(fxImix, NOW).files[0].content;
   var twice = gen(JSON.parse(JSON.stringify(fxImix)), NOW).files[0].content;
   return { pass: once === twice, detail: once === twice ? '' : firstDiff(once, twice) };
+});
+
+test('STL .py re-import: every generated fixture reloads to byte-identical output (source=tool, coverage=1)', function () {
+  var fixtures = { minimal: fxMinimal, imix: fxImix, chained: fxChained, latency: fxLatency,
+                   rateUnits: fxRateUnits, packetLayers: fxPacketLayers, tunnels: fxTunnels,
+                   vmDeps: fxVmDeps, pcapReplay: fxPcapReplay };
+  for (var k in fixtures) {
+    if (!fixtures.hasOwnProperty(k)) { continue; }
+    var once = gen(fixtures[k], NOW).files[0].content;
+    var res = TB.imp.parse(once, { kind: 'stl' });
+    if (!res.ok) { return { pass: false, detail: k + ': parse failed - ' + res.error }; }
+    if (res.source !== 'tool') { return { pass: false, detail: k + ': source=' + res.source + ' (expected tool)' }; }
+    if (res.coverage !== 1) { return { pass: false, detail: k + ': coverage=' + res.coverage + ' unmapped=' + JSON.stringify(res.unmapped) }; }
+    var twice = gen(res.model, NOW).files[0].content;
+    if (once !== twice) { return { pass: false, detail: k + ': ' + firstDiff(once, twice) }; }
+  }
+  return { pass: true };
+});
+
+test('STL .py re-import: hand-edits in the body are honoured (body is the source of truth)', function () {
+  var once = gen(fxImix, NOW).files[0].content;
+  var edited = once.replace('src="16.0.0.1"', 'src="10.9.8.7"');   // first hit is the base_pkt IP
+  var res = TB.imp.parse(edited, { kind: 'stl' });
+  if (!res.ok) { return { pass: false, detail: 'parse failed - ' + res.error }; }
+  var got = res.model.streams[0].packet.l3.src;
+  return { pass: got === '10.9.8.7', detail: got === '10.9.8.7' ? '' : 'got src=' + got };
+});
+
+test('STL .py re-import: a file with no tag parses best-effort (source=foreign)', function () {
+  var once = gen(fxMinimal, NOW).files[0].content;
+  var untagged = once.replace(/^# trexb:.*$/m, '# (tag removed)');
+  var res = TB.imp.parse(untagged, { kind: 'stl' });
+  var ok = res.ok && res.source === 'foreign' && res.model.streams.length === 1;
+  return { pass: ok, detail: ok ? '' : 'source=' + (res && res.source) + ' streams=' + (res && res.model && res.model.streams.length) };
 });
 
 test('warning: frame size below 60 bytes', function () {
@@ -2392,6 +2435,12 @@ var TEST_DOCS = {
     'A profile mixing pps and percentage streams must summarise as "100 pps + 25% of line rate at -m 1" - never a nonsense sum across different units.',
   'round-trip: model -> JSON -> parse -> regenerate identical':
     'Serialises the IMIX fixture through JSON.stringify/parse and regenerates. Byte-identical output proves saved .trexb.json models survive save/load forever.',
+  'STL .py re-import: every generated fixture reloads to byte-identical output (source=tool, coverage=1)':
+    'The STL .py re-edit seam (v0.26.3): every generated fixture - minimal, IMIX, chained bursts, latency, rate units, packet layers (ICMP/IPv6/frag), VXLAN/GRE/MPLS/QinQ/NSH tunnels, VM dependent vars, and pcap replay - is parsed back with TB.imp.parse and regenerated. Byte-identical output across all nine proves the importer reverses every packet layer, field-engine op, TX mode, flow-stat and tunable the generator emits, so a profile made in the tool always reloads into the tool. source=tool with 100% coverage confirms the "# trexb: stl" tag is read and no body line is left unmapped.',
+  'STL .py re-import: hand-edits in the body are honoured (body is the source of truth)':
+    'Edits the source IP directly in a generated .py body and re-imports: the model returns with the edited value, proving values are read from the body (not a stale embedded copy) - so a hand-tweaked IP or rate in a generated profile survives the round-trip.',
+  'STL .py re-import: a file with no tag parses best-effort (source=foreign)':
+    'Strips the "# trexb:" tag from a generated file and re-imports: the parser still recovers the stream and reports source=foreign, demonstrating the best-effort path for hand-written profiles that carry no self-describing tag.',
   'warning: frame size below 60 bytes':
     'Frame sizes under 60 B are rejected or padded by most NICs; the generator must say so.',
   'warning: duplicate latency pg_id':

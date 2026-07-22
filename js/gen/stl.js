@@ -419,6 +419,10 @@
     lines.push('def register():');
     lines.push('    return STLGenProfile()');
     lines.push('');
+    /* self-describing re-edit tag; values live in the file body above, so
+       re-import reads them from there (see js/core/import.js). Mirrors cap2. */
+    lines.push(TB.gen.py.fileTag('stl', model.schemaVersion));
+    lines.push('');
 
     return {
       files: [{ name: fileBase + '.py', language: 'python', content: lines.join('\n') }],
