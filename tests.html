@@ -996,6 +996,24 @@ test('ASTF distribution: ip_gen emits TRex-valid "random" (never "rand")', funct
   return { pass: ok, detail: ok ? '' : 'dist lines: ' + JSON.stringify(c.match(/distribution="[^"]*"/g) || []) };
 });
 
+test('ASTF global-info: ip.tos/ip.ttl + tcp.no_delay_counter/delay_ack_msec emit and round-trip', function () {
+  var m = JSON.parse(JSON.stringify(fxAstfHttp));
+  m.globals.client.tcp.no_delay_counter = 5;
+  m.globals.client.tcp.delay_ack_msec = 40;
+  m.globals.client.ip = { tos: 32, ttl: 64 };
+  var once = agen(m, NOW).files[0].content;
+  var need = ['c_glob_info.tcp.no_delay_counter = 5', 'c_glob_info.tcp.delay_ack_msec = 40',
+              'c_glob_info.ip.tos = 32', 'c_glob_info.ip.ttl = 64'];
+  for (var i = 0; i < need.length; i++) {
+    if (once.indexOf(need[i]) === -1) { return { pass: false, detail: 'missing: ' + TB.util.escapeHtml(need[i]) }; }
+  }
+  var res = TB.imp.parse(once, { kind: 'astf' });
+  var g = res.model.globals.client;
+  var ok = g.tcp.no_delay_counter === 5 && g.tcp.delay_ack_msec === 40 && g.ip.tos === 32 && g.ip.ttl === 64 &&
+    agen(res.model, NOW).files[0].content === once;
+  return { pass: ok, detail: ok ? '' : 'round-trip: ' + JSON.stringify({ ndc: g.tcp.no_delay_counter, dam: g.tcp.delay_ack_msec, ip: g.ip }) };
+});
+
 test('ASTF .py re-import: generated fixtures reload to byte-identical output (source=tool)', function () {
   /* gtpu is excluded: its GTP-U topology lives in the companion _topo.py, a
      separate file that isn't re-imported, so tunnelsTopo can't be recovered
@@ -2540,6 +2558,8 @@ var TEST_DOCS = {
     'ASTFGlobalInfo scheduler ramp-up on the client side, matching astf/param_ipv6.py-style global-info emission. Full-file golden.',
   'ASTF distribution: ip_gen emits TRex-valid "random" (never "rand")':
     'Locks the v0.27.1 fix: the ip_gen distribution dropdown offered an invalid "rand" (TRex ASTFIPGenDist wants "seq"/"random"), and the generator emits the value verbatim. With distribution set to "random" the output carries distribution="random" and never the bad "rand" - the same correctness guard already in place for cap2.',
+  'ASTF global-info: ip.tos/ip.ttl + tcp.no_delay_counter/delay_ack_msec emit and round-trip':
+    'The v0.27.4 global-info coverage additions - the four ASTFGlobalInfo knobs the shipped param_ip_tos_ttl / param_tcp_delay_ack / param_no_delay_counter examples use that the builder previously could not set: ip.tos, ip.ttl, tcp.no_delay_counter and tcp.delay_ack_msec. The generator emits each c_glob_info line and the importer reads them straight back, so profiles using them round-trip.',
   'ASTF .py re-import: generated fixtures reload to byte-identical output (source=tool)':
     'The ASTF .py re-edit seam (v0.27.3, phase A3a): every generated fixture - pcap mode, rampup + global-info, HTTP program, two weighted template groups, UDP send_msg/recv_msg, a set_var/jmp loop, and the elephant-flow recv len(buf)*N - is parsed back with TB.imp.parse and regenerated. Byte-identical output proves the importer reverses the whole interconnected shape: ASTFIPGen ranges, per-side ASTFGlobalInfo TCP tuning, the payload variable pool, ASTFProgram command lists, and the ASTFTCPClient/ServerTemplate -> ASTFTemplate wiring - so an ASTF profile made in the tool reloads into the tool.',
   'ASTF program mode (http_manual_commands-like)':

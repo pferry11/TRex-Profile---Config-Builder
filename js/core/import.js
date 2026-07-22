@@ -732,7 +732,7 @@
    * separate file and is not re-imported (tunnelsTopo stays default). ------ */
 
   var ASTF_TCP_FIELDS = ['mss', 'rxbufsize', 'txbufsize', 'initwnd', 'no_delay', 'do_rfc1323',
-                         'keepinit', 'keepidle', 'keepintvl'];
+                         'keepinit', 'keepidle', 'keepintvl', 'no_delay_counter', 'delay_ack_msec'];
 
   /* undo python string escaping (\n \r \t \\ \' \") */
   function pyUnescape(s) {
@@ -749,7 +749,9 @@
   function astfSideGlobals() {
     return {
       tcp: { mss: null, rxbufsize: null, txbufsize: null, initwnd: null, no_delay: null,
-             do_rfc1323: null, keepinit: null, keepidle: null, keepintvl: null },
+             do_rfc1323: null, keepinit: null, keepidle: null, keepintvl: null,
+             no_delay_counter: null, delay_ack_msec: null },
+      ip: { tos: null, ttl: null },
       scheduler: { rampupSec: null },
       ipv6: { enable: false, srcMsb: '', dstMsb: '' }
     };
@@ -780,6 +782,10 @@
     ASTF_TCP_FIELDS.forEach(function (f) {
       var m = new RegExp(varName + '\\.tcp\\.' + f + '\\s*=\\s*(-?\\d+)').exec(text);
       if (m) { g.tcp[f] = parseInt(m[1], 10); hit = true; }
+    });
+    ['tos', 'ttl'].forEach(function (f) {
+      var m = new RegExp(varName + '\\.ip\\.' + f + '\\s*=\\s*(-?\\d+)').exec(text);
+      if (m) { if (!g.ip) { g.ip = { tos: null, ttl: null }; } g.ip[f] = parseInt(m[1], 10); hit = true; }
     });
     var r = new RegExp(varName + '\\.scheduler\\.rampup_sec\\s*=\\s*(-?\\d+)').exec(text);
     if (r) { g.scheduler.rampupSec = parseInt(r[1], 10); hit = true; }

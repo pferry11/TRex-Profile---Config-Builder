@@ -175,7 +175,9 @@
   function sideGlobals() {
     return {
       tcp: { mss: null, rxbufsize: null, txbufsize: null, initwnd: null, no_delay: null,
-             do_rfc1323: null, keepinit: null, keepidle: null, keepintvl: null },
+             do_rfc1323: null, keepinit: null, keepidle: null, keepintvl: null,
+             no_delay_counter: null, delay_ack_msec: null },
+      ip: { tos: null, ttl: null },
       scheduler: { rampupSec: null },
       ipv6: { enable: false, srcMsb: '', dstMsb: '' }
     };
@@ -225,6 +227,7 @@
        *   1. "Profile-wide settings" group - L7 presets + GTP-U topology
        *   2. the traffic work area          - list | profile editor | output  */
       var topbar = el('div', { class: 'builder-topbar' });
+      var modeBox = el('div', { class: 'tunables-box' });
       var presetBox = el('div', { class: 'tunables-box' });
       var topoBox = el('div', { class: 'tunables-box' });
       var listPane = el('div', { class: 'pane pane-list' });
@@ -237,7 +240,7 @@
       container.appendChild(topbar);
       container.appendChild(el('div', { class: 'builder-group' }, [
         el('div', { class: 'builder-group-title', text: 'Profile-wide settings' }),
-        presetBox, topoBox
+        modeBox, presetBox, topoBox
       ]));
       container.appendChild(workHead);
       container.appendChild(el('div', { class: 'builder-panes' }, [listPane, editorPane, outputPane]));
@@ -249,6 +252,27 @@
         workHead.lastChild.textContent = isPcap
           ? 'the pcap-replay entries this profile runs — list, editor & live output'
           : 'the send/recv templates this profile runs — list, editor & live output';
+      }
+
+      /* Traffic mode (pcap list vs send/recv program) - the primary switch for
+         what the work area builds. Lives at the top of Profile-wide settings so
+         it's easy to find (it used to hide among the top-bar header fields). */
+      function renderMode() {
+        modeBox.innerHTML = '';
+        var row = el('div', { class: 'field-row' });
+        row.appendChild(field({ label: 'Traffic mode', tip: TB.help.astf.mode, type: 'select', value: model.mode,
+          options: [{ value: 'pcap', label: 'pcap list (ASTFCapInfo)' }, { value: 'program', label: 'program (send/recv)' }],
+          onChange: function (v) {
+            model.mode = v;
+            if (v === 'pcap' && !model.capList.length) { model.capList.push(defaultCap()); }
+            if (v === 'program' && !model.templates.length) { model.templates.push(defaultTemplate(1)); }
+            selectedIdx = 0;
+            renderMode(); renderList(); renderEditor(); regen();
+          } }));
+        row.appendChild(el('span', { class: 'field-hint', text: model.mode === 'pcap'
+          ? 'replaying capture files — switch to build send/recv command programs'
+          : 'building send/recv command programs — switch to replay capture files' }));
+        modeBox.appendChild(row);
       }
 
       function renderPresets() {
@@ -364,15 +388,7 @@
         topbar.appendChild(field({ label: 'TRex version', tip: TB.help.astf.trexVersion, type: 'select', value: model.trexVersion,
           options: TB.gen.versions().map(function (v) { return { value: v, label: 'v' + v }; }),
           onChange: function (v) { model.trexVersion = v; regen(); } }));
-        topbar.appendChild(field({ label: 'Mode', tip: TB.help.astf.mode, type: 'select', value: model.mode,
-          options: [{ value: 'pcap', label: 'pcap list (ASTFCapInfo)' }, { value: 'program', label: 'program (send/recv)' }],
-          onChange: function (v) {
-            model.mode = v;
-            if (v === 'pcap' && !model.capList.length) { model.capList.push(defaultCap()); }
-            if (v === 'program' && !model.templates.length) { model.templates.push(defaultTemplate(1)); }
-            selectedIdx = 0;
-            renderList(); renderEditor(); regen();
-          } }));
+        /* Traffic mode moved to the top of Profile-wide settings (renderMode). */
 
         var actions = el('div', { class: 'topbar-actions' });
         actions.appendChild(histCtl);
@@ -540,12 +556,18 @@
       function globSide(g, label) {
         var box = el('div', { class: 'glob-col' });
         box.appendChild(el('div', { class: 'pane-title', text: label }));
+        if (!g.ip) { g.ip = { tos: null, ttl: null }; }   /* models saved before ip.tos/ttl */
         var row = el('div', { class: 'field-row' });
-        ['mss', 'rxbufsize', 'txbufsize', 'initwnd', 'no_delay', 'do_rfc1323', 'keepinit', 'keepidle', 'keepintvl']
+        ['mss', 'rxbufsize', 'txbufsize', 'initwnd', 'no_delay', 'do_rfc1323', 'keepinit', 'keepidle',
+         'keepintvl', 'no_delay_counter', 'delay_ack_msec']
           .forEach(function (f) {
             row.appendChild(field({ label: 'tcp.' + f, tip: TB.help.astf.tcpTuning, type: 'int', value: g.tcp[f], width: '80px',
               onChange: function (v) { g.tcp[f] = v; regen(); } }));
           });
+        ['tos', 'ttl'].forEach(function (f) {
+          row.appendChild(field({ label: 'ip.' + f, tip: TB.help.astf.ipTosTtl, type: 'int', value: g.ip[f], width: '70px',
+            onChange: function (v) { g.ip[f] = v; regen(); } }));
+        });
         box.appendChild(row);
         var row2 = el('div', { class: 'field-row' });
         row2.appendChild(field({ label: 'rampup_sec', tip: TB.help.astf.rampupSec, type: 'int', value: g.scheduler.rampupSec, width: '80px',
@@ -766,6 +788,7 @@
 
       function renderAll() {
         renderTopbar();
+        renderMode();
         renderPresets();
         renderTopo();
         renderList();

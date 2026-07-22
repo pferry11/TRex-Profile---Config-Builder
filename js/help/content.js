@@ -134,7 +134,8 @@
       cmdDelay: 'Pause the program - emulates think time or server processing.',
       cmdLoop: 'set_var/set_label/jmp_nz form counted loops, e.g. a server that sends its response 10 times.',
       httpBodyBytes: 'Body size of the generated HTTP response; Content-Length is set to match.',
-      tcpTuning: 'Only non-empty fields are emitted. mss/buffers/initwnd shape throughput; keepalive fields hold long idle flows.',
+      tcpTuning: 'Only non-empty fields are emitted. mss/buffers/initwnd shape throughput; keepalive fields hold long idle flows; no_delay_counter / delay_ack_msec tune Nagle/delayed-ACK.',
+      ipTosTtl: 'IPv4 TOS/DSCP byte and TTL for this side\'s packets (ASTFGlobalInfo.ip.tos / .ip.ttl). Only non-empty values are emitted.',
       rampupSec: 'Linear CPS ramp: reach the full connection rate after N seconds. Client side drives the ramp.',
       ipv6: 'Wrap the (IPv4-derived) addresses in IPv6 using the given src/dst most-significant bytes.'
     },

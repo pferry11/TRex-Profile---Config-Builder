@@ -76,7 +76,7 @@
   }
 
   var TCP_FIELDS = ['mss', 'rxbufsize', 'txbufsize', 'initwnd', 'no_delay', 'do_rfc1323',
-                    'keepinit', 'keepidle', 'keepintvl'];
+                    'keepinit', 'keepidle', 'keepintvl', 'no_delay_counter', 'delay_ack_msec'];
 
   function globInfoLines(varName, g, indent) {
     var py = TB.gen.py;
@@ -89,6 +89,12 @@
         lines.push(indent + varName + '.tcp.' + f + ' = ' + py.num(v));
       }
     }
+    ['tos', 'ttl'].forEach(function (f2) {
+      var iv = g.ip ? g.ip[f2] : null;
+      if (iv !== null && iv !== undefined && iv !== '') {
+        lines.push(indent + varName + '.ip.' + f2 + ' = ' + py.num(iv));
+      }
+    });
     if (g.scheduler && g.scheduler.rampupSec !== null && g.scheduler.rampupSec !== undefined && g.scheduler.rampupSec !== '') {
       lines.push(indent + varName + '.scheduler.rampup_sec = ' + py.num(g.scheduler.rampupSec));
     }
