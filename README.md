@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.27.2** · Target: TRex v3.06
+**App version 0.27.3** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -56,8 +56,12 @@ maps best-effort: the parser follows the common shipped shapes (local
 `base_pkt`/`pkt`/`vm` assignments, fluent and low-level field engines, multi-stream
 `STLProfile([...])` lists), and preserves anything it can't resolve statically as a
 raw-scapy expression. The realistic route to loading *every* shipped example is a
-backend Python resolver that executes rather than parses. ASTF `.py` re-import is
-still on the roadmap; the tag scheme and coverage report are already shared.
+backend Python resolver that executes rather than parses. The **ASTF** tab now
+re-imports generated `.py` profiles too, via its own **Open profile…** — a profile
+made in the tool round-trips byte-identically (ip generator, per-side TCP tuning,
+the payload pool, program command lists, and the template wiring all come back).
+Hand-written ASTF is best-effort offline for now; its execute-not-parse resolver is
+the next step (the tag scheme and coverage report are already shared).
 
 ## Run it
 
@@ -83,7 +87,7 @@ automatically when the backend is absent or can't resolve a file.
 ## Tests
 
 Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (98 tests). No toolchain needed.
+generators (100 tests). No toolchain needed.
 
 ## Notes
 
@@ -118,6 +122,10 @@ generators (98 tests). No toolchain needed.
   profiles use a different builder and fall back to offline; a few IPv6 files need
   a Linux network stack). It needs only scapy, not a full TRex install, and the
   Flask backend exposes it at `POST /api/import_profile`.
+- `node tools/astf_import_coverage.js` is the ASTF equivalent (needs `v3.06/astf/`).
+  As with STL, the offline parser round-trips our own generated shape 100% but maps
+  the shipped hand-written corpus only partially — the execute-not-parse resolver
+  (phase A3c) is what closes that gap.
 - Design and the phased build prompts used to create this app live in
   [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/BUILD_PROMPTS.md`](docs/BUILD_PROMPTS.md).
 - The `v3.06/` folder (the TRex distribution used as format reference) is

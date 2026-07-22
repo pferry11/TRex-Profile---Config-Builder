@@ -465,6 +465,11 @@
     lines.push('def register():');
     lines.push('    return ASTFGenProfile()');
     lines.push('');
+    /* self-describing re-edit tag; values live in the file body above, so
+       re-import reads them from there (see js/core/import.js). Mirrors STL/cap2.
+       Only the main profile carries it - the companion _topo.py is not re-imported. */
+    lines.push(TB.gen.py.fileTag('astf', model.schemaVersion));
+    lines.push('');
 
     var files = [{ name: fileBase + '.py', language: 'python', content: lines.join('\n') }];
     if (topoOn(model)) {

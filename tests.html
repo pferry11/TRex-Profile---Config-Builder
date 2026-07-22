@@ -937,7 +937,8 @@ var astfCommon =
 var astfFooter =
 '\n\n\n' +
 'def register():\n' +
-'    return ASTFGenProfile()\n';
+'    return ASTFGenProfile()\n' +
+'\n# trexb: astf schemaVersion=1 - edit values above; re-import reads them from the file body\n';
 
 var goldenAstfHttp = AHDR('http_simple_like', sumAstfHttp) + astfCommon +
 '\n' +
@@ -993,6 +994,24 @@ test('ASTF distribution: ip_gen emits TRex-valid "random" (never "rand")', funct
   var c = agen(m, NOW).files[0].content;
   var ok = c.indexOf('distribution="random"') !== -1 && !/distribution="rand"/.test(c);
   return { pass: ok, detail: ok ? '' : 'dist lines: ' + JSON.stringify(c.match(/distribution="[^"]*"/g) || []) };
+});
+
+test('ASTF .py re-import: generated fixtures reload to byte-identical output (source=tool)', function () {
+  /* gtpu is excluded: its GTP-U topology lives in the companion _topo.py, a
+     separate file that isn't re-imported, so tunnelsTopo can't be recovered
+     from the main profile (a documented limitation, like STL's description). */
+  var fixtures = { http: fxAstfHttp, rampup: fxAstfRampup, program: fxAstfProgram,
+                   groups: fxAstfGroups, udp: fxAstfUdp, loop: fxAstfLoop, eflow: fxAstfEflow };
+  for (var k in fixtures) {
+    if (!fixtures.hasOwnProperty(k)) { continue; }
+    var once = agen(fixtures[k], NOW).files[0].content;
+    var res = TB.imp.parse(once, { kind: 'astf' });
+    if (!res.ok) { return { pass: false, detail: k + ': parse failed - ' + res.error }; }
+    if (res.source !== 'tool') { return { pass: false, detail: k + ': source=' + res.source }; }
+    var twice = agen(res.model, NOW).files[0].content;
+    if (once !== twice) { return { pass: false, detail: k + ': ' + firstDiff(once, twice) }; }
+  }
+  return { pass: true };
 });
 
 astfContains('ASTF program mode (http_manual_commands-like)', fxAstfProgram, [
@@ -2521,6 +2540,8 @@ var TEST_DOCS = {
     'ASTFGlobalInfo scheduler ramp-up on the client side, matching astf/param_ipv6.py-style global-info emission. Full-file golden.',
   'ASTF distribution: ip_gen emits TRex-valid "random" (never "rand")':
     'Locks the v0.27.1 fix: the ip_gen distribution dropdown offered an invalid "rand" (TRex ASTFIPGenDist wants "seq"/"random"), and the generator emits the value verbatim. With distribution set to "random" the output carries distribution="random" and never the bad "rand" - the same correctness guard already in place for cap2.',
+  'ASTF .py re-import: generated fixtures reload to byte-identical output (source=tool)':
+    'The ASTF .py re-edit seam (v0.27.3, phase A3a): every generated fixture - pcap mode, rampup + global-info, HTTP program, two weighted template groups, UDP send_msg/recv_msg, a set_var/jmp loop, and the elephant-flow recv len(buf)*N - is parsed back with TB.imp.parse and regenerated. Byte-identical output proves the importer reverses the whole interconnected shape: ASTFIPGen ranges, per-side ASTFGlobalInfo TCP tuning, the payload variable pool, ASTFProgram command lists, and the ASTFTCPClient/ServerTemplate -> ASTFTemplate wiring - so an ASTF profile made in the tool reloads into the tool.',
   'ASTF program mode (http_manual_commands-like)':
     'Structural check of a scripted HTTP exchange: client/server ASTFProgram command lists, payload variable pooling, and template/association wiring, per the shipped http_manual_commands.py.',
   'ASTF program loop (http_manual_commands_loop-like)':

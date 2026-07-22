@@ -4,7 +4,7 @@
   var TB = root.TB = root.TB || {};
 
   /* App version - bump the minor number with each feature release (commit batch). */
-  TB.APP_VERSION = '0.27.2';
+  TB.APP_VERSION = '0.27.3';
 
   var TABS = [
     { id: 'stl', label: 'STL Profile', mount: function (c) { TB.ui.stlBuilder.mount(c); } },

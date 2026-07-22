@@ -722,4 +722,249 @@
              coverage: total ? mapped / total : 1,
              mapped: mapped, total: total, unmapped: unmapped };
   };
+
+  /* ---- ASTF (.py) structural parser -------------------------------------
+   * Reverses the deterministic output of js/gen/astf.js: an ASTFGenProfile
+   * class whose get_profile builds an ASTFIPGen, optional c/s ASTFGlobalInfo,
+   * and either a cap_list (ASTFCapInfo) or program-mode templates (ASTFProgram
+   * -> ASTFTCPClient/ServerTemplate -> ASTFTemplate). Values are read from the
+   * body; a file this tool generated maps fully. The companion _topo.py is a
+   * separate file and is not re-imported (tunnelsTopo stays default). ------ */
+
+  var ASTF_TCP_FIELDS = ['mss', 'rxbufsize', 'txbufsize', 'initwnd', 'no_delay', 'do_rfc1323',
+                         'keepinit', 'keepidle', 'keepintvl'];
+
+  /* undo python string escaping (\n \r \t \\ \' \") */
+  function pyUnescape(s) {
+    return String(s).replace(/\\([nrt"'\\])/g, function (_, c) {
+      return c === 'n' ? '\n' : c === 'r' ? '\r' : c === 't' ? '\t' : c;
+    });
+  }
+  /* leading python string literal of an expression -> its unescaped JS value */
+  function pyStrValue(expr) {
+    var m = /^\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/.exec(String(expr));
+    return m ? pyUnescape(m[1].slice(1, -1)) : null;
+  }
+
+  function astfSideGlobals() {
+    return {
+      tcp: { mss: null, rxbufsize: null, txbufsize: null, initwnd: null, no_delay: null,
+             do_rfc1323: null, keepinit: null, keepidle: null, keepintvl: null },
+      scheduler: { rampupSec: null },
+      ipv6: { enable: false, srcMsb: '', dstMsb: '' }
+    };
+  }
+
+  /* ASTFIPGenDist(ip_range=["a","b"], distribution="seq"[, per_core_distribution="x"]) */
+  function parseIpGenDist(args) {
+    var r = /ip_range\s*=\s*\[\s*"([^"]*)"\s*,\s*"([^"]*)"\s*\]/.exec(args);
+    return {
+      start: r ? r[1] : '', end: r ? r[2] : '',
+      distribution: kwStr(args, 'distribution') || 'seq',
+      perCore: kwStr(args, 'per_core_distribution')
+    };
+  }
+  /* the ip_gen<sfx> block: ip_gen_c<sfx>/ip_gen_s<sfx> dists + the ip_offset */
+  function parseIpGenBlock(text, sfx) {
+    var e = sfx.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var cM = new RegExp('ip_gen_c' + e + '\\s*=\\s*ASTFIPGenDist\\(([^)]*)\\)').exec(text);
+    var sM = new RegExp('ip_gen_s' + e + '\\s*=\\s*ASTFIPGenDist\\(([^)]*)\\)').exec(text);
+    if (!cM || !sM) { return null; }
+    var offM = new RegExp('ip_gen' + e + '\\s*=\\s*ASTFIPGen\\(glob=ASTFIPGenGlobal\\(ip_offset=("[^"]*"|\'[^\']*\')').exec(text);
+    return { client: parseIpGenDist(cM[1]), server: parseIpGenDist(sM[1]),
+             ipOffset: offM ? unq(offM[1]) : '1.0.0.0' };
+  }
+
+  function parseGlobalsInto(text, varName, g, counters) {
+    var hit = false;
+    ASTF_TCP_FIELDS.forEach(function (f) {
+      var m = new RegExp(varName + '\\.tcp\\.' + f + '\\s*=\\s*(-?\\d+)').exec(text);
+      if (m) { g.tcp[f] = parseInt(m[1], 10); hit = true; }
+    });
+    var r = new RegExp(varName + '\\.scheduler\\.rampup_sec\\s*=\\s*(-?\\d+)').exec(text);
+    if (r) { g.scheduler.rampupSec = parseInt(r[1], 10); hit = true; }
+    if (new RegExp(varName + '\\.ipv6\\.enable\\s*=\\s*1').test(text)) {
+      g.ipv6.enable = true; hit = true;
+      var s = new RegExp(varName + '\\.ipv6\\.src_msb\\s*=\\s*"([^"]*)"').exec(text);
+      if (s) { g.ipv6.srcMsb = s[1]; }
+      var d = new RegExp(varName + '\\.ipv6\\.dst_msb\\s*=\\s*"([^"]*)"').exec(text);
+      if (d) { g.ipv6.dstMsb = d[1]; }
+    }
+    if (hit) { counters.mapped++; counters.total++; }
+  }
+
+  /* payload var defs -> { varName: { payload, len } } */
+  function parseAstfPayloads(text) {
+    var HTTP_REQ = (TB.gen && TB.gen.astfHttpReq) || null;
+    var respHeader = (TB.gen && TB.gen.astfHttpResponseHeader) || function () { return ''; };
+    var map = {};
+    text.split(/\r?\n/).forEach(function (raw) {
+      var m = /^\s*([A-Za-z_]\w*)\s*=\s*(('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")(\s*\+\s*\('\*'\s*\*\s*(\d+)\))?)\s*$/.exec(raw);
+      if (!m) { return; }
+      var strVal = pyStrValue(m[3]);
+      if (m[5] !== undefined) {                       // '<header>' + ('*' * N) -> httpResponse
+        var body = parseInt(m[5], 10);
+        map[m[1]] = { payload: { kind: 'httpResponse', bodyBytes: body }, len: respHeader(body).length + body };
+      } else if (HTTP_REQ !== null && strVal === HTTP_REQ) {
+        map[m[1]] = { payload: { kind: 'httpRequest' }, len: HTTP_REQ.length };
+      } else {
+        map[m[1]] = { payload: { kind: 'text', text: strVal }, len: strVal.length };
+      }
+    });
+    return map;
+  }
+
+  /* collect prog_* command programs -> { varName: { isUdp, commands } } */
+  function parseAstfPrograms(text, paymap) {
+    var progs = {};
+    text.split(/\r?\n/).forEach(function (raw) {
+      var t = raw.trim();
+      var def = /^(prog_[cs]\w*)\s*=\s*ASTFProgram\(([^)]*)\)/.exec(t);
+      if (def) { progs[def[1]] = { isUdp: /stream\s*=\s*False/.test(def[2]), commands: [] }; return; }
+      var call = /^(prog_[cs]\w*)\.(\w+)\((.*)\)\s*$/.exec(t);
+      if (!call) { return; }
+      var cur = progs[call[1]];
+      if (!cur) { return; }
+      var op = call[2], a = call[3].trim();
+      switch (op) {
+        case 'send': case 'send_msg': {
+          var pe = paymap[a]; cur.commands.push({ op: op, payload: pe ? pe.payload : { kind: 'text', text: '' } }); break;
+        }
+        case 'recv': {
+          var lm = /^len\(([A-Za-z_]\w*)\)(?:\s*\*\s*(\d+))?$/.exec(a);
+          if (lm && lm[2]) {                                    // len(var) * N -> explicit count
+            var pl = paymap[lm[1]];
+            cur.commands.push({ op: 'recv', bytes: (pl ? pl.len : 0) * parseInt(lm[2], 10) });
+          } else if (lm) {                                      // len(var) alone -> "auto" (match peer send)
+            cur.commands.push({ op: 'recv', bytes: null });
+          } else {                                              // a literal byte count
+            cur.commands.push({ op: 'recv', bytes: /^\d+$/.test(a) ? parseInt(a, 10) : null });
+          }
+          break;
+        }
+        case 'recv_msg': cur.commands.push({ op: 'recv_msg', count: parseInt(a, 10) || 1 }); break;
+        case 'delay': cur.commands.push({ op: 'delay', usec: parseInt(a, 10) || 0 }); break;
+        case 'delay_rand': {
+          var dr = /(\d+)\s*,\s*(\d+)/.exec(a);
+          cur.commands.push({ op: 'delay_rand', minUsec: dr ? +dr[1] : 0, maxUsec: dr ? +dr[2] : 0 }); break;
+        }
+        case 'set_var': {
+          var sv = /("(?:[^"]*)"|'(?:[^']*)')\s*,\s*(-?\d+)/.exec(a);
+          cur.commands.push({ op: 'set_var', id: sv ? unq(sv[1]) : 'var1', value: sv ? parseInt(sv[2], 10) : 0 }); break;
+        }
+        case 'set_label': cur.commands.push({ op: 'set_label', name: unq(a) }); break;
+        case 'jmp_nz': {
+          var jm = /("(?:[^"]*)"|'(?:[^']*)')\s*,\s*("(?:[^"]*)"|'(?:[^']*)')/.exec(a);
+          cur.commands.push({ op: 'jmp_nz', id: jm ? unq(jm[1]) : 'var1', label: jm ? unq(jm[2]) : 'a:' }); break;
+        }
+        case 'wait_for_peer_close': cur.commands.push({ op: 'wait_for_peer_close' }); break;
+      }
+    });
+    return progs;
+  }
+
+  TB.imp.parsers.astf = function (text) {
+    text = String(text);
+    var model = {
+      kind: 'astf', schemaVersion: 1, trexVersion: '3.06',
+      meta: { name: 'imported_astf_profile', description: '', modified: '' },
+      ipGen: { client: { start: '16.0.0.1', end: '16.0.0.255', distribution: 'seq', perCore: null },
+               server: { start: '48.0.0.1', end: '48.0.255.255', distribution: 'seq', perCore: null },
+               ipOffset: '1.0.0.0' },
+      globals: { client: astfSideGlobals(), server: astfSideGlobals() },
+      mode: 'pcap', capList: [], templates: [],
+      tunnelsTopo: { enabled: false, ctxs: [{ srcStart: '16.0.0.1', srcEnd: '16.0.0.255',
+        initialTeid: 0, teidJump: 1, sport: 5000, version: 4, srcIp: '1.1.1.11', dstIp: '12.2.2.2', activate: true }] }
+    };
+    var nameM = /#\s*Re-edit:\s*load\s+(.+?)\.trexb\.json/.exec(text);
+    if (nameM) { model.meta.name = nameM[1]; }
+    var counters = { mapped: 0, total: 0 };
+    var unmapped = [];
+
+    var mainIpGen = parseIpGenBlock(text, '');
+    if (mainIpGen) { model.ipGen = mainIpGen; counters.mapped++; counters.total++; }
+    parseGlobalsInto(text, 'c_glob_info', model.globals.client, counters);
+    parseGlobalsInto(text, 's_glob_info', model.globals.server, counters);
+
+    function overrideFor(ipGenVar) {
+      if (!ipGenVar || ipGenVar === 'ip_gen') { return null; }
+      var sfx = ipGenVar.replace(/^ip_gen/, '');
+      return parseIpGenBlock(text, sfx);
+    }
+
+    if (/cap_list\s*=\s*\[/.test(text)) {
+      model.mode = 'pcap';
+      var capRe = /ASTFCapInfo\(([^)]*)\)/g, cm;
+      while ((cm = capRe.exec(text))) {
+        var a = cm[1];
+        model.capList.push({
+          file: kwStr(a, 'file') || '', cps: kwNum(a, 'cps'),
+          port: kwNum(a, 'port'), sDelayUsec: kwNum(a, 's_delay'),
+          ipGenOverride: overrideFor(kwAny(a, 'ip_gen'))
+        });
+        counters.mapped++; counters.total++;
+      }
+    } else if (/templates\s*=\s*\[/.test(text)) {
+      model.mode = 'program';
+      var paymap = parseAstfPayloads(text);
+      var progs = parseAstfPrograms(text, paymap);
+
+      var tempC = {}, tempS = {}, tpls = {}, m2;
+      var tcRe = /(temp_c\w*)\s*=\s*ASTFTCPClientTemplate\(([^)]*)\)/g;
+      while ((m2 = tcRe.exec(text))) {
+        var ca = m2[2];
+        tempC[m2[1]] = { prog: kwAny(ca, 'program'), ipGen: kwAny(ca, 'ip_gen'),
+                         port: kwNum(ca, 'port'), cps: kwNum(ca, 'cps') };
+      }
+      var tsRe = /(temp_s\w*)\s*=\s*ASTFTCPServerTemplate\(([\s\S]*?)\)\s*$/gm;
+      while ((m2 = tsRe.exec(text))) {
+        var sa = m2[2];
+        var assoc = /assoc\s*=\s*ASTFAssociationRule\((\d+)\)/.exec(sa);
+        tempS[m2[1]] = { prog: /program\s*=\s*(prog_s\w*)/.exec(sa) ? RegExp.$1 : null,
+                         assocPort: assoc ? parseInt(assoc[1], 10) : null };
+      }
+      var tplRe = /(template\w*)\s*=\s*ASTFTemplate\(([^)]*)\)/g;
+      while ((m2 = tplRe.exec(text))) {
+        var ta = m2[2];
+        tpls[m2[1]] = { cVar: /client_template\s*=\s*(temp_c\w*)/.exec(ta) ? RegExp.$1 : null,
+                        sVar: /server_template\s*=\s*(temp_s\w*)/.exec(ta) ? RegExp.$1 : null,
+                        tgName: kwStr(ta, 'tg_name') };
+      }
+      var listM = /templates\s*=\s*\[([^\]]*)\]/.exec(text);
+      var order = listM ? listM[1].split(',').map(function (x) { return x.trim(); }).filter(Boolean) : Object.keys(tpls);
+      order.forEach(function (tvar) {
+        var tp = tpls[tvar]; if (!tp) { return; }
+        var tc = tempC[tp.cVar] || {}, ts = tempS[tp.sVar] || {};
+        var pc = progs[tc.prog] || { isUdp: false, commands: [] };
+        var ps = progs[ts.prog] || { isUdp: false, commands: [] };
+        model.templates.push({
+          id: 't_' + (tp.tgName || model.templates.length),
+          tgName: tp.tgName || null,
+          cps: tc.cps === null || tc.cps === undefined ? 1 : tc.cps,
+          assocPort: tc.port !== null && tc.port !== undefined ? tc.port : ts.assocPort,
+          stream: !pc.isUdp,
+          client: { commands: pc.commands },
+          server: { commands: ps.commands },
+          ipGenOverride: overrideFor(tc.ipGen)
+        });
+        counters.mapped++; counters.total++;
+      });
+    }
+
+    /* coverage: surface body lines we did not consume (foreign files show gaps) */
+    var ASKIP = /^(from |import |class |def |return|parser|args =|formatter_class=|ip_gen|dist_|glob=|default_|cap_list|templates|c_glob_info|s_glob_info|prog_[cs]|temp_[cs]|template|ASTF|http_req|http_response|payload|\)|\]|,|#)/;
+    text.split(/\r?\n/).forEach(function (raw) {
+      var t = raw.trim();
+      if (!t || t.charAt(0) === '#') { return; }
+      if (ASKIP.test(t)) { return; }
+      counters.total++; unmapped.push(t);
+    });
+
+    if (!model.capList.length && !model.templates.length) {
+      return { ok: false, error: 'Could not recognise any ASTF cap list or templates in this file.' };
+    }
+    return { ok: true, model: model,
+             coverage: counters.total ? counters.mapped / counters.total : 1,
+             mapped: counters.mapped, total: counters.total, unmapped: unmapped };
+  };
 })(typeof window !== 'undefined' ? window : globalThis);
