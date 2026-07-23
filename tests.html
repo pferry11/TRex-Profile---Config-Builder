@@ -2824,6 +2824,7 @@ test('docs: every registered test has a write-up on this page', function () {
  * the IndexedDB persistence test); results render in registration order. */
 var results = document.getElementById('results');
 var passCount = 0;
+var failures = [];
 var t0 = performance.now();
 
 function renderResult(t, out) {
@@ -2844,7 +2845,7 @@ function renderResult(t, out) {
     (TEST_DOCS[t.name] ? '<div class="test-doc">' + TB.util.escapeHtml(TEST_DOCS[t.name]) + '</div>' : '') +
     (out.pass || !out.detail ? '' : '<pre class="diff">' + out.detail + '</pre>');
   results.appendChild(div);
-  if (out.pass) { passCount++; }
+  if (out.pass) { passCount++; } else { failures.push(t.name); }
 }
 
 var runChain = Promise.resolve();
@@ -2862,6 +2863,9 @@ runChain.then(function () {
   document.getElementById('summary').style.color = passCount === tests.length ? '#3fb950' : '#f85149';
   document.getElementById('run-meta').textContent = 'This run: ' + new Date().toLocaleString() +
     ' · ' + elapsed + ' ms · executed in this browser on page load';
+  /* Machine-readable result for the Robot harness (tests/robot t0_goldens.robot).
+     Set last, so its presence also signals "the run has finished". */
+  window.__TB_TESTS = { passed: passCount, total: tests.length, failures: failures, elapsedMs: elapsed };
 });
 </script>
 </body>

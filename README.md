@@ -1,6 +1,6 @@
 # TRex Profile & Config Builder
 
-**App version 0.28.1** · Target: TRex v3.06
+**App version 0.29.0** · Target: TRex v3.06
 
 A lightweight web app that generates Cisco TRex v3.06 artifacts through
 interactive forms — no install, no build step, no backend required.
@@ -92,8 +92,46 @@ can't resolve a file.
 
 ## Tests
 
-Open `tests.html` in a browser — a self-contained golden-diff suite for all
-generators (103 tests). No toolchain needed.
+Two layers, and they answer different questions.
+
+**Inner loop — `tests.html`.** Open it in a browser: a self-contained golden-diff
+suite for all generators (104 tests). No toolchain needed. Run it after touching
+anything under `js/gen/` and before every commit. It proves generated output
+did not *change*.
+
+**Harness — `tests/robot/`.** A tiered [Robot Framework](https://robotframework.org)
+suite that proves the output is *valid*, that re-import still maps the shipped
+corpus, and (once the lab tiers land) that a profile puts the traffic it claims
+on the wire. Runs from the Windows dev PC:
+
+```powershell
+.\tests\robot\run.ps1 -NoLab
+```
+
+| Tier | Suite | Question it answers | Lab? |
+|---|---|---|---|
+| T0 | `t0_goldens` | Do generators still emit the expected bytes? (wraps `tests.html`) | No |
+| T1 | `t1_static` | Is every generated artifact syntactically valid? | No |
+| T2 | `t2_import_fidelity` | Does re-import still map the corpus, and do generated files round-trip byte-identically? | No |
+| T3–T5 | _(planned)_ | Offline sim, UI functional, real traffic | Yes |
+| T6a | `tests/manual/USABILITY_*.md` | Is each tab understandable to a fresh user? | No |
+| T6b | `tests/manual/MANUAL_CASES.md` | TPG / BIRD, which the lab can't reach | Partly |
+
+T1 generates every committed fixture through the real generators in Node and
+checks each artifact parses as what consumes it — Python compiles, YAML and JSON
+parse, BIRD braces balance, `port_limit` agrees with the interface count. T2
+gates the coverage baselines below, so a parser change that quietly drops files
+fails the run instead of a README.
+
+The fixtures in `tests/robot/fixtures/models.json` are **derived**, captured from
+`tests.html` (where they are already pinned by goldens) via
+`tests/robot/fixtures/capture_fixtures.robot`. Re-run that maintenance task and
+review the diff whenever the app's fixtures change.
+
+Manual usability walkthroughs cover all 11 tabs — including TPG and BIRD, whose
+builder UI is testable even though their lab tier is not. See
+[`tests/manual/README.md`](tests/manual/README.md); findings land in
+`tests/manual/FINDINGS.md` and graduate into the Manual tab's roadmap.
 
 ## Notes
 
@@ -105,6 +143,10 @@ generators (103 tests). No toolchain needed.
   candidate improvements.
 - Manual screenshots regenerate with `powershell -File tools\screenshots.ps1`
   (headless Edge) whenever the UI changes.
+- The three `*_import_coverage.js` tools below accept `--json` (machine-readable
+  counts) and `--min-full N` (exit non-zero below the threshold), which is how
+  the T2 tier gates the baselines. Shared flag handling lives in
+  `tools/coverage_cli.js`; the bare `node tools/<tool>.js` form is unchanged.
 - `node tools/cap2_import_coverage.js` measures how much of the shipped v3.06
   cap2 profiles the importer can map back into editable models (needs a local
   `v3.06/` tree) — the objective metric when closing cap2 import-fidelity gaps.

@@ -1,3 +1,5 @@
 v3.06/
 __pycache__/
 *.pyc
+tests/robot/results/
+tests/robot/workspace/

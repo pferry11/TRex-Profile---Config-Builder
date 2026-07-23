@@ -1,0 +1,2971 @@
+{
+  "cap2Dns": {
+    "capInfo": [
+      {
+        "cps": 1,
+        "dynPyload": null,
+        "ipg": 10000,
+        "limit": null,
+        "name": "cap2/dns.pcap",
+        "plugin_id": null,
+        "rtt": 10000,
+        "w": 1
+      }
+    ],
+    "duration": 10,
+    "flags": {
+      "capIpg": null,
+      "capIpgMin": null,
+      "capOverrideIpg": null,
+      "macOverrideByIp": null,
+      "vlan": {
+        "enabled": false,
+        "vlan0": 100,
+        "vlan1": 200
+      }
+    },
+    "generator": {
+      "clientsEnd": "16.0.1.255",
+      "clientsPerGb": 201,
+      "clientsStart": "16.0.0.1",
+      "distribution": "seq",
+      "dualPortMask": "1.0.0.0",
+      "minClients": 101,
+      "serversEnd": "48.0.0.255",
+      "serversStart": "48.0.0.1",
+      "tcpAging": 1,
+      "udpAging": 1
+    },
+    "kind": "cap2",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "dns_like"
+    },
+    "schemaVersion": 1,
+    "trexVersion": "3.06"
+  },
+  "cap2DynPyload": {
+    "capInfo": [
+      {
+        "cps": 2.776,
+        "dynPyload": [
+          {
+            "len": 4,
+            "pkt_id": 1,
+            "pyld_offset": 4,
+            "type": 1
+          }
+        ],
+        "ipg": 10000,
+        "limit": null,
+        "name": "avl/delay_10_http_browsing_0.pcap",
+        "plugin_id": null,
+        "rtt": 10000,
+        "w": 1
+      }
+    ],
+    "duration": 10,
+    "flags": {
+      "capIpg": null,
+      "capIpgMin": null,
+      "capOverrideIpg": null,
+      "macOverrideByIp": null,
+      "vlan": {
+        "enabled": false,
+        "vlan0": 100,
+        "vlan1": 200
+      }
+    },
+    "generator": {
+      "clientsEnd": "16.0.1.255",
+      "clientsPerGb": 201,
+      "clientsStart": "16.0.0.1",
+      "distribution": "seq",
+      "dualPortMask": "1.0.0.0",
+      "minClients": 101,
+      "serversEnd": "48.0.0.255",
+      "serversStart": "48.0.0.1",
+      "tcpAging": 1,
+      "udpAging": 1
+    },
+    "kind": "cap2",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "dyn_pyload_like"
+    },
+    "schemaVersion": 1,
+    "trexVersion": "3.06"
+  },
+  "cfgServerBig": {
+    "cores": 7,
+    "enableZmqPub": null,
+    "id": "s3",
+    "interfaces": [
+      "02:00.0",
+      "02:00.1",
+      "84:00.0",
+      "84:00.1"
+    ],
+    "limitMemory": null,
+    "memory": {
+      "dpFlows": 10048576,
+      "enabled": true
+    },
+    "mgmtHost": "",
+    "name": "x710_big",
+    "platform": {
+      "dualIf": [
+        {
+          "socket": 0,
+          "threads": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "socket": 1,
+          "threads": [
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        }
+      ],
+      "enabled": true,
+      "latencyThreadId": 8,
+      "masterThreadId": 0
+    },
+    "portBandwidthGb": 10,
+    "portLimit": 4,
+    "ports": [
+      {
+        "defaultGw": "1.1.1.2",
+        "ip": "1.1.1.1",
+        "mode": "ip"
+      },
+      {
+        "defaultGw": "1.1.1.1",
+        "ip": "1.1.1.2",
+        "mode": "ip"
+      },
+      {
+        "defaultGw": "2.1.1.2",
+        "ip": "2.1.1.1",
+        "mode": "ip"
+      },
+      {
+        "defaultGw": "2.1.1.1",
+        "ip": "2.1.1.2",
+        "mode": "ip"
+      }
+    ],
+    "prefix": null,
+    "telnetPort": null,
+    "trexDir": "/opt/trex/v3.06"
+  },
+  "cfgServerIp": {
+    "cores": null,
+    "enableZmqPub": null,
+    "id": "s1",
+    "interfaces": [
+      "03:00.0",
+      "03:00.1"
+    ],
+    "limitMemory": null,
+    "memory": {
+      "enabled": false
+    },
+    "mgmtHost": "",
+    "name": "simple",
+    "platform": {
+      "enabled": false
+    },
+    "portBandwidthGb": null,
+    "portLimit": 2,
+    "ports": [
+      {
+        "defaultGw": "2.2.2.2",
+        "ip": "1.1.1.1",
+        "mode": "ip"
+      },
+      {
+        "defaultGw": "1.1.1.1",
+        "ip": "2.2.2.2",
+        "mode": "ip"
+      }
+    ],
+    "prefix": null,
+    "telnetPort": null,
+    "trexDir": "/opt/trex/v3.06"
+  },
+  "cfgServerMac": {
+    "cores": 4,
+    "enableZmqPub": true,
+    "id": "s2",
+    "interfaces": [
+      "08:00.0",
+      "08:00.1"
+    ],
+    "limitMemory": null,
+    "memory": {
+      "enabled": false
+    },
+    "mgmtHost": "10.0.0.11",
+    "name": "xl710",
+    "platform": {
+      "dualIf": [
+        {
+          "socket": 0,
+          "threads": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            7
+          ]
+        }
+      ],
+      "enabled": true,
+      "latencyThreadId": 5,
+      "masterThreadId": 0
+    },
+    "portBandwidthGb": 40,
+    "portLimit": 2,
+    "ports": [
+      {
+        "destMac": "00:0c:29:55:37:c7",
+        "mode": "mac",
+        "srcMac": "00:0c:29:55:37:bd"
+      },
+      {
+        "destMac": "00:0c:29:55:37:bd",
+        "mode": "mac",
+        "srcMac": "00:0c:29:55:37:c7"
+      }
+    ],
+    "prefix": null,
+    "telnetPort": null,
+    "trexDir": "/opt/trex/v3.06"
+  },
+  "cliAstf": {
+    "astfClientMask": "0x1",
+    "astfServerOnly": false,
+    "cfgPath": "/etc/trex_cfg.yaml",
+    "cores": 8,
+    "durationSec": 60,
+    "extraArgs": "",
+    "flowPortAffinity": false,
+    "kind": "cli",
+    "latencyPps": null,
+    "meta": {
+      "name": "test"
+    },
+    "mode": "astf",
+    "mult": 2,
+    "profile": "two_server.py",
+    "schemaVersion": 1,
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06"
+  },
+  "cliCapture": {
+    "astfClientMask": null,
+    "astfServerOnly": false,
+    "cfgPath": "/etc/trex_cfg.yaml",
+    "cores": 8,
+    "durationSec": 60,
+    "extraArgs": "",
+    "flowPortAffinity": false,
+    "kind": "cli",
+    "latencyPps": null,
+    "meta": {
+      "name": "test"
+    },
+    "mode": "astf",
+    "mult": 2,
+    "profile": "two_server.py",
+    "schemaVersion": 1,
+    "service": {
+      "bpf": "udp port 53",
+      "capture": "record",
+      "enabled": true,
+      "limit": 500,
+      "outFile": "/tmp/dns.pcap",
+      "pipe": false,
+      "ports": "0,1",
+      "rx": "0 1",
+      "snaplen": 128,
+      "tx": "0"
+    },
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06"
+  },
+  "cliStl": {
+    "astfClientMask": null,
+    "astfServerOnly": false,
+    "cfgPath": "/etc/trex_cfg.yaml",
+    "cores": 8,
+    "durationSec": 60,
+    "extraArgs": "",
+    "flowPortAffinity": false,
+    "kind": "cli",
+    "latencyPps": null,
+    "meta": {
+      "name": "test"
+    },
+    "mode": "stl",
+    "mult": 1,
+    "profile": "imix.py",
+    "schemaVersion": 1,
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06"
+  },
+  "fxAstfEflow": {
+    "capList": [],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "eflow_like"
+    },
+    "mode": "program",
+    "schemaVersion": 1,
+    "templates": [
+      {
+        "assocPort": 80,
+        "client": {
+          "commands": [
+            {
+              "op": "send",
+              "payload": {
+                "kind": "httpRequest"
+              }
+            },
+            {
+              "bytes": 6563000,
+              "op": "recv"
+            }
+          ]
+        },
+        "cps": 1,
+        "id": "t1",
+        "ipGenOverride": null,
+        "server": {
+          "commands": [
+            {
+              "bytes": null,
+              "op": "recv"
+            },
+            {
+              "id": "var1",
+              "op": "set_var",
+              "value": 100
+            },
+            {
+              "name": "a:",
+              "op": "set_label"
+            },
+            {
+              "op": "send",
+              "payload": {
+                "bodyBytes": 65536,
+                "kind": "httpResponse"
+              }
+            },
+            {
+              "id": "var1",
+              "label": "a:",
+              "op": "jmp_nz"
+            }
+          ]
+        },
+        "stream": true,
+        "tgName": "eflow"
+      }
+    ],
+    "trexVersion": "3.06"
+  },
+  "fxAstfGroups": {
+    "capList": [],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "groups_like"
+    },
+    "mode": "program",
+    "schemaVersion": 1,
+    "templates": [
+      {
+        "assocPort": 80,
+        "client": {
+          "commands": [
+            {
+              "op": "send",
+              "payload": {
+                "kind": "httpRequest"
+              }
+            },
+            {
+              "bytes": null,
+              "op": "recv"
+            }
+          ]
+        },
+        "cps": 1,
+        "id": "t1",
+        "ipGenOverride": null,
+        "server": {
+          "commands": [
+            {
+              "bytes": null,
+              "op": "recv"
+            },
+            {
+              "op": "send",
+              "payload": {
+                "bodyBytes": 32768,
+                "kind": "httpResponse"
+              }
+            }
+          ]
+        },
+        "stream": true,
+        "tgName": "1x"
+      },
+      {
+        "assocPort": 81,
+        "client": {
+          "commands": [
+            {
+              "op": "send",
+              "payload": {
+                "kind": "httpRequest"
+              }
+            },
+            {
+              "bytes": null,
+              "op": "recv"
+            }
+          ]
+        },
+        "cps": 2,
+        "id": "t2",
+        "ipGenOverride": null,
+        "server": {
+          "commands": [
+            {
+              "bytes": null,
+              "op": "recv"
+            },
+            {
+              "op": "send",
+              "payload": {
+                "bodyBytes": 32768,
+                "kind": "httpResponse"
+              }
+            }
+          ]
+        },
+        "stream": true,
+        "tgName": "2x"
+      }
+    ],
+    "trexVersion": "3.06"
+  },
+  "fxAstfGtpu": {
+    "capList": [
+      {
+        "cps": 1,
+        "file": "../avl/delay_10_http_browsing_0.pcap",
+        "ipGenOverride": null,
+        "port": null,
+        "sDelayUsec": null
+      }
+    ],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "gtpu_like"
+    },
+    "mode": "pcap",
+    "schemaVersion": 1,
+    "templates": [],
+    "trexVersion": "3.06",
+    "tunnelsTopo": {
+      "ctxs": [
+        {
+          "activate": true,
+          "dstIp": "12.2.2.2",
+          "initialTeid": 0,
+          "sport": 5000,
+          "srcEnd": "16.0.0.100",
+          "srcIp": "1.1.1.11",
+          "srcStart": "16.0.0.1",
+          "teidJump": 1,
+          "version": 4
+        },
+        {
+          "activate": false,
+          "dstIp": "12.2.2.2",
+          "initialTeid": 1000,
+          "sport": 5001,
+          "srcEnd": "16.0.0.200",
+          "srcIp": "1.1.1.12",
+          "srcStart": "16.0.0.101",
+          "teidJump": 2,
+          "version": 4
+        }
+      ],
+      "enabled": true
+    }
+  },
+  "fxAstfHttp": {
+    "capList": [
+      {
+        "cps": 2.776,
+        "file": "../avl/delay_10_http_browsing_0.pcap",
+        "ipGenOverride": null,
+        "port": null,
+        "sDelayUsec": null
+      }
+    ],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "http_simple_like"
+    },
+    "mode": "pcap",
+    "schemaVersion": 1,
+    "templates": [],
+    "trexVersion": "3.06"
+  },
+  "fxAstfLoop": {
+    "capList": [],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "http_loop"
+    },
+    "mode": "program",
+    "schemaVersion": 1,
+    "templates": [
+      {
+        "assocPort": 80,
+        "client": {
+          "commands": [
+            {
+              "op": "send",
+              "payload": {
+                "kind": "httpRequest"
+              }
+            },
+            {
+              "bytes": null,
+              "op": "recv"
+            }
+          ]
+        },
+        "cps": 1,
+        "id": "t1",
+        "ipGenOverride": null,
+        "server": {
+          "commands": [
+            {
+              "bytes": null,
+              "op": "recv"
+            },
+            {
+              "id": "var2",
+              "op": "set_var",
+              "value": 10
+            },
+            {
+              "name": "a:",
+              "op": "set_label"
+            },
+            {
+              "maxUsec": 500000,
+              "minUsec": 100000,
+              "op": "delay_rand"
+            },
+            {
+              "op": "send",
+              "payload": {
+                "bodyBytes": 32768,
+                "kind": "httpResponse"
+              }
+            },
+            {
+              "id": "var2",
+              "label": "a:",
+              "op": "jmp_nz"
+            }
+          ]
+        },
+        "stream": true,
+        "tgName": null
+      }
+    ],
+    "trexVersion": "3.06"
+  },
+  "fxAstfProgram": {
+    "capList": [],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "http_program"
+    },
+    "mode": "program",
+    "schemaVersion": 1,
+    "templates": [
+      {
+        "assocPort": 80,
+        "client": {
+          "commands": [
+            {
+              "op": "send",
+              "payload": {
+                "kind": "httpRequest"
+              }
+            },
+            {
+              "bytes": null,
+              "op": "recv"
+            }
+          ]
+        },
+        "cps": 1,
+        "id": "t1",
+        "ipGenOverride": null,
+        "server": {
+          "commands": [
+            {
+              "bytes": null,
+              "op": "recv"
+            },
+            {
+              "op": "send",
+              "payload": {
+                "bodyBytes": 32768,
+                "kind": "httpResponse"
+              }
+            }
+          ]
+        },
+        "stream": true,
+        "tgName": null
+      }
+    ],
+    "trexVersion": "3.06"
+  },
+  "fxAstfRampup": {
+    "capList": [
+      {
+        "cps": 2.776,
+        "file": "../avl/delay_10_http_browsing_0.pcap",
+        "ipGenOverride": null,
+        "port": null,
+        "sDelayUsec": null
+      }
+    ],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": 5
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "rampup_like"
+    },
+    "mode": "pcap",
+    "schemaVersion": 1,
+    "templates": [],
+    "trexVersion": "3.06"
+  },
+  "fxAstfUdp": {
+    "capList": [],
+    "globals": {
+      "client": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      },
+      "server": {
+        "ipv6": {
+          "dstMsb": "",
+          "enable": false,
+          "srcMsb": ""
+        },
+        "scheduler": {
+          "rampupSec": null
+        },
+        "tcp": {
+          "do_rfc1323": null,
+          "initwnd": null,
+          "keepidle": null,
+          "keepinit": null,
+          "keepintvl": null,
+          "mss": null,
+          "no_delay": null,
+          "rxbufsize": null,
+          "txbufsize": null
+        }
+      }
+    },
+    "ipGen": {
+      "client": {
+        "distribution": "seq",
+        "end": "16.0.0.255",
+        "perCore": null,
+        "start": "16.0.0.0"
+      },
+      "ipOffset": "1.0.0.0",
+      "server": {
+        "distribution": "seq",
+        "end": "48.0.255.255",
+        "perCore": null,
+        "start": "48.0.0.0"
+      }
+    },
+    "kind": "astf",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "udp_program"
+    },
+    "mode": "program",
+    "schemaVersion": 1,
+    "templates": [
+      {
+        "assocPort": 53,
+        "client": {
+          "commands": [
+            {
+              "op": "send_msg",
+              "payload": {
+                "kind": "text",
+                "text": "ping-ping-ping"
+              }
+            },
+            {
+              "count": 1,
+              "op": "recv_msg"
+            }
+          ]
+        },
+        "cps": 10,
+        "id": "t1",
+        "ipGenOverride": null,
+        "server": {
+          "commands": [
+            {
+              "count": 1,
+              "op": "recv_msg"
+            },
+            {
+              "op": "send_msg",
+              "payload": {
+                "kind": "text",
+                "text": "pong-pong-pong"
+              }
+            }
+          ]
+        },
+        "stream": false,
+        "tgName": null
+      }
+    ],
+    "trexVersion": "3.06"
+  },
+  "fxBird": {
+    "bgp": [
+      {
+        "ipv6": false,
+        "localAs": 65000,
+        "localIp": "1.1.1.3",
+        "name": "my_bgp1",
+        "neighborAs": 65000,
+        "neighborIp": "1.1.1.1"
+      },
+      {
+        "ipv6": false,
+        "localAs": 65000,
+        "localIp": "1.1.2.3",
+        "name": "my_bgp2",
+        "neighborAs": 65000,
+        "neighborIp": "1.1.2.1"
+      }
+    ],
+    "kind": "bird",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "bgp_dut"
+    },
+    "node": {
+      "ipv4": "1.1.1.3",
+      "ipv4Subnet": 24,
+      "ipv6": null,
+      "ipv6Enabled": false,
+      "ipv6Subnet": 124,
+      "mac": "00:00:00:01:00:07",
+      "port": 0
+    },
+    "ospf": {
+      "area": 0,
+      "enabled": false
+    },
+    "rip": {
+      "enabled": false
+    },
+    "routerId": "100.100.100.100",
+    "schemaVersion": 1,
+    "staticRoutes": [
+      {
+        "count": 11,
+        "ipv6": false,
+        "nextHop": "1.1.1.3",
+        "prefix": "42.42.42.0",
+        "prefixLen": 32
+      }
+    ],
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06"
+  },
+  "fxBirdIgp": {
+    "bgp": [],
+    "kind": "bird",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "igp_mix"
+    },
+    "node": {
+      "ipv4": "1.1.1.3",
+      "ipv4Subnet": 24,
+      "ipv6": null,
+      "ipv6Enabled": false,
+      "ipv6Subnet": 124,
+      "mac": "00:00:00:01:00:07",
+      "port": 0
+    },
+    "ospf": {
+      "area": 0,
+      "enabled": true
+    },
+    "rip": {
+      "enabled": true
+    },
+    "routerId": "100.100.100.100",
+    "schemaVersion": 1,
+    "staticRoutes": [
+      {
+        "count": 3,
+        "ipv6": false,
+        "nextHop": "1.1.1.3",
+        "prefix": "10.10.0.0",
+        "prefixLen": 24
+      },
+      {
+        "count": 1,
+        "ipv6": true,
+        "nextHop": "2001:db8::1",
+        "prefix": "2001:db8:100::",
+        "prefixLen": 64
+      }
+    ],
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06"
+  },
+  "fxChained": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "burst_chain"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": "S1",
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s1",
+        "isgUsec": 10,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 10,
+          "totalPkts": 1000,
+          "type": "single_burst"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": false
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s2",
+        "isgUsec": 0,
+        "mode": {
+          "count": 5,
+          "ibgUsec": 1000000,
+          "pktsPerBurst": 4,
+          "pps": 1000,
+          "totalPkts": null,
+          "type": "multi_burst"
+        },
+        "name": "S1",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 13,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": []
+  },
+  "fxEmu": {
+    "clients": {
+      "count": 15,
+      "dg": "1.1.2.1",
+      "ipv4": "1.1.2.3",
+      "ipv4Enabled": true,
+      "ipv6": "2001:DB8:1::2",
+      "ipv6Enabled": true,
+      "mac": "00:00:00:70:00:01"
+    },
+    "kind": "emu",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "emu_clients"
+    },
+    "nsCount": 1,
+    "plugins": {
+      "arp": {
+        "enabled": true,
+        "timer": 50
+      },
+      "dhcpv4": {
+        "discoverClassId": null,
+        "enabled": false,
+        "requestClassId": null
+      },
+      "dhcpv6": {
+        "enabled": false
+      },
+      "dns": {
+        "enabled": false,
+        "mode": "client",
+        "records": [],
+        "serverIp": "1.1.2.1"
+      },
+      "icmp": {
+        "enabled": true
+      },
+      "igmp": {
+        "dmac": "00:00:00:70:00:01",
+        "enabled": true
+      },
+      "ipv6nd": {
+        "dmac": null,
+        "enabled": false
+      },
+      "mdns": {
+        "domainName": null,
+        "enabled": false,
+        "hostPattern": "client-{}.emu",
+        "ttl": 240
+      }
+    },
+    "schemaVersion": 1,
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06",
+    "vlan": {
+      "enabled": false,
+      "tci": 1
+    }
+  },
+  "fxEmuDhcp": {
+    "clients": {
+      "count": 15,
+      "dg": "1.1.2.1",
+      "ipv4": "1.1.2.3",
+      "ipv4Enabled": false,
+      "ipv6": "2001:DB8:1::2",
+      "ipv6Enabled": false,
+      "mac": "00:00:00:70:00:01"
+    },
+    "kind": "emu",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "emu_dhcp"
+    },
+    "nsCount": 1,
+    "plugins": {
+      "arp": {
+        "enabled": true,
+        "timer": null
+      },
+      "dhcpv4": {
+        "discoverClassId": "MSFT 5.0",
+        "enabled": true,
+        "requestClassId": "MSFT 5.0"
+      },
+      "dhcpv6": {
+        "enabled": false
+      },
+      "dns": {
+        "enabled": false,
+        "mode": "client",
+        "records": [],
+        "serverIp": "1.1.2.1"
+      },
+      "icmp": {
+        "enabled": true
+      },
+      "igmp": {
+        "dmac": "00:00:00:70:00:01",
+        "enabled": false
+      },
+      "ipv6nd": {
+        "dmac": null,
+        "enabled": false
+      },
+      "mdns": {
+        "domainName": null,
+        "enabled": false,
+        "hostPattern": "client-{}.emu",
+        "ttl": 240
+      }
+    },
+    "schemaVersion": 1,
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06",
+    "vlan": {
+      "enabled": false,
+      "tci": 1
+    }
+  },
+  "fxEmuDns": {
+    "clients": {
+      "count": 15,
+      "dg": "1.1.2.1",
+      "ipv4": "1.1.2.3",
+      "ipv4Enabled": true,
+      "ipv6": "2001:DB8:1::2",
+      "ipv6Enabled": true,
+      "mac": "00:00:00:70:00:01"
+    },
+    "kind": "emu",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "emu_dns"
+    },
+    "nsCount": 1,
+    "plugins": {
+      "arp": {
+        "enabled": true,
+        "timer": null
+      },
+      "dhcpv4": {
+        "discoverClassId": null,
+        "enabled": false,
+        "requestClassId": null
+      },
+      "dhcpv6": {
+        "enabled": false
+      },
+      "dns": {
+        "enabled": true,
+        "mode": "server",
+        "records": [
+          {
+            "answer": "173.36.109.208",
+            "domain": "trex-tgn.cisco.com",
+            "type": "A"
+          },
+          {
+            "answer": "72.163.4.185",
+            "domain": "cisco.com",
+            "type": "A"
+          },
+          {
+            "answer": "2001:420:1101:1::185",
+            "domain": "cisco.com",
+            "type": "AAAA"
+          }
+        ],
+        "serverIp": ""
+      },
+      "icmp": {
+        "enabled": true
+      },
+      "igmp": {
+        "dmac": "00:00:00:70:00:01",
+        "enabled": false
+      },
+      "ipv6nd": {
+        "dmac": null,
+        "enabled": true
+      },
+      "mdns": {
+        "domainName": "test.local",
+        "enabled": true,
+        "hostPattern": "client-{}.emu",
+        "ttl": 240
+      }
+    },
+    "schemaVersion": 1,
+    "trexDir": "/opt/trex/v3.06",
+    "trexVersion": "3.06",
+    "vlan": {
+      "enabled": false,
+      "tci": 1
+    }
+  },
+  "fxImix": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "imix_like"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s1",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 28,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 60,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": [
+            {
+              "fixChecksum": true,
+              "max": "16.0.0.254",
+              "min": "16.0.0.1",
+              "name": "ip_src",
+              "op": "inc",
+              "sizeBytes": 4,
+              "step": 1,
+              "writeTo": "IP.src"
+            },
+            {
+              "fixChecksum": true,
+              "max": "48.0.0.254",
+              "min": "48.0.0.1",
+              "name": "ip_dst",
+              "op": "inc",
+              "sizeBytes": 4,
+              "step": 1,
+              "writeTo": "IP.dst"
+            }
+          ]
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s2",
+        "isgUsec": 0.1,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 16,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S1",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 590,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": [
+            {
+              "fixChecksum": true,
+              "max": "16.0.0.254",
+              "min": "16.0.0.1",
+              "name": "ip_src",
+              "op": "inc",
+              "sizeBytes": 4,
+              "step": 1,
+              "writeTo": "IP.src"
+            },
+            {
+              "fixChecksum": true,
+              "max": "48.0.0.254",
+              "min": "48.0.0.1",
+              "name": "ip_dst",
+              "op": "inc",
+              "sizeBytes": 4,
+              "step": 1,
+              "writeTo": "IP.dst"
+            }
+          ]
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s3",
+        "isgUsec": 0.2,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 4,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S2",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 1514,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": [
+            {
+              "fixChecksum": true,
+              "max": "16.0.0.254",
+              "min": "16.0.0.1",
+              "name": "ip_src",
+              "op": "inc",
+              "sizeBytes": 4,
+              "step": 1,
+              "writeTo": "IP.src"
+            },
+            {
+              "fixChecksum": true,
+              "max": "48.0.0.254",
+              "min": "48.0.0.1",
+              "name": "ip_dst",
+              "op": "inc",
+              "sizeBytes": 4,
+              "step": 1,
+              "writeTo": "IP.dst"
+            }
+          ]
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": []
+  },
+  "fxLatency": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "latency_stream"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": true,
+          "pgId": 5,
+          "type": "latency"
+        },
+        "id": "s1",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 1000,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": []
+  },
+  "fxMinimal": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "udp_simple"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s1",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": "size",
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": [
+      {
+        "default": 64,
+        "help": "frame size",
+        "name": "size",
+        "type": "int"
+      }
+    ]
+  },
+  "fxPacketLayers": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "packet_layers"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s1",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "icmpId": 7,
+            "icmpKind": "echo-request",
+            "icmpSeq": 1,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "icmp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s2",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S1",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "fragOffset": 185,
+            "moreFrags": true,
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s3",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S2",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "2001:db8::2",
+            "ext": "frag",
+            "src": "2001:db8::1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv6"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 100,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s4",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S3",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "2001:db8::2",
+            "src": "2001:db8::1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv6"
+          },
+          "l4": {
+            "dport": 12,
+            "icmpId": null,
+            "icmpKind": "echo-reply",
+            "icmpSeq": null,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "icmp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": []
+  },
+  "fxPcapReplay": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "pcap_replay"
+    },
+    "pcapReplay": {
+      "enabled": true,
+      "file": "cap2/dns.pcap",
+      "ipgUsec": 10,
+      "loopCount": 5,
+      "speedup": 1
+    },
+    "schemaVersion": 1,
+    "streams": [],
+    "trexVersion": "3.06",
+    "tunables": []
+  },
+  "fxRateUnits": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "rate_units"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s1",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 1000000,
+          "rateUnit": "bps_L2",
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s2",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 25,
+          "rateUnit": "percentage",
+          "totalPkts": 500,
+          "type": "single_burst"
+        },
+        "name": "S1",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 1514,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": []
+  },
+  "fxTpg": {
+    "dot1q": [
+      {
+        "maxVlan": 5,
+        "minVlan": 1
+      }
+    ],
+    "kind": "tpg",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "vlan_sweep"
+    },
+    "numTpgids": 6,
+    "ports": "0 1",
+    "qinq": [
+      {
+        "inner": 1,
+        "outer": 100
+      }
+    ],
+    "schemaVersion": 1,
+    "trexVersion": "3.06"
+  },
+  "fxTunnels": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "tunnels"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s1",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 150,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "tunnel": {
+            "label": 100,
+            "mplsTtl": null,
+            "outerDst": "10.0.0.2",
+            "outerSrc": "10.0.0.1",
+            "outerVlanId": 100,
+            "si": 1,
+            "spi": 42,
+            "type": "vxlan",
+            "vni": 5000
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s2",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S1",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 100,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "tunnel": {
+            "label": 100,
+            "mplsTtl": null,
+            "outerDst": "10.0.0.2",
+            "outerSrc": "10.0.0.1",
+            "outerVlanId": 100,
+            "si": 1,
+            "spi": 42,
+            "type": "gre",
+            "vni": 5000
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s3",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S2",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "tunnel": {
+            "label": 100,
+            "mplsTtl": null,
+            "outerDst": "10.0.0.2",
+            "outerSrc": "10.0.0.1",
+            "outerVlanId": 100,
+            "si": 1,
+            "spi": 42,
+            "type": "mpls",
+            "vni": 5000
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s4",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S3",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "tunnel": {
+            "label": 100,
+            "mplsTtl": null,
+            "outerDst": "10.0.0.2",
+            "outerSrc": "10.0.0.1",
+            "outerVlanId": 100,
+            "si": 1,
+            "spi": 42,
+            "type": "qinq",
+            "vni": 5000
+          },
+          "vlan": {
+            "enabled": true,
+            "id": 200,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      },
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s5",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S4",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "tunnel": {
+            "label": 100,
+            "mplsTtl": null,
+            "outerDst": "10.0.0.2",
+            "outerSrc": "10.0.0.1",
+            "outerVlanId": 100,
+            "si": 1,
+            "spi": 42,
+            "type": "nsh",
+            "vni": 5000
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": []
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": []
+  },
+  "fxVmDeps": {
+    "kind": "stl",
+    "meta": {
+      "description": "",
+      "modified": "",
+      "name": "vm_deps"
+    },
+    "schemaVersion": 1,
+    "streams": [
+      {
+        "chain": {
+          "actionCount": null,
+          "next": null,
+          "selfStart": true
+        },
+        "enabled": true,
+        "flowStats": {
+          "addPortId": false,
+          "pgId": null,
+          "type": "none"
+        },
+        "id": "s1",
+        "isgUsec": 0,
+        "mode": {
+          "count": null,
+          "ibgUsec": null,
+          "pktsPerBurst": null,
+          "pps": 100,
+          "totalPkts": null,
+          "type": "cont"
+        },
+        "name": "S0",
+        "packet": {
+          "l2": {
+            "dstMac": null,
+            "srcMac": null
+          },
+          "l3": {
+            "dst": "48.0.0.1",
+            "src": "16.0.0.1",
+            "tos": null,
+            "ttl": null,
+            "type": "ipv4"
+          },
+          "l4": {
+            "dport": 12,
+            "sport": 1025,
+            "tcpFlags": null,
+            "type": "udp"
+          },
+          "payload": {
+            "fill": "x",
+            "frameSize": 64,
+            "frameSizeTunable": null,
+            "mode": "pad",
+            "rawScapy": null
+          },
+          "vlan": {
+            "enabled": false,
+            "id": 100,
+            "prio": 0
+          }
+        },
+        "vm": {
+          "cacheSize": null,
+          "tuple": null,
+          "vars": [
+            {
+              "fixChecksum": true,
+              "max": "16.0.0.254",
+              "min": "16.0.0.1",
+              "name": "ip_src",
+              "nextVar": "ip_dst",
+              "offsetFixup": 2,
+              "op": "inc",
+              "sizeBytes": 4,
+              "splitToCores": false,
+              "step": 1,
+              "writeTo": "IP.src"
+            },
+            {
+              "fixChecksum": true,
+              "max": "48.0.0.254",
+              "min": "48.0.0.1",
+              "name": "ip_dst",
+              "op": "inc",
+              "sizeBytes": 4,
+              "step": 1,
+              "writeTo": "IP.dst"
+            }
+          ]
+        }
+      }
+    ],
+    "trexVersion": "3.06",
+    "tunables": []
+  }
+}

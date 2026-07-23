@@ -10,13 +10,17 @@
  * full corpus coverage is the job of the backend Python resolver (phase A3c).
  *
  * Requires a local v3.06 tree (not committed - see README). Usage:
- *   node tools/astf_import_coverage.js [repoRoot]
+ *   node tools/astf_import_coverage.js [repoRoot] [--json] [--min-full N]
+ * See tools/coverage_cli.js for the flags (used by the Robot T2 suite to gate
+ * on regressions).
  */
 'use strict';
 var fs = require('fs');
 var path = require('path');
+var cli = require('./coverage_cli.js');
 
-var repoRoot = process.argv[2] || process.cwd();
+var args = cli.parseArgs(process.argv.slice(2));
+var repoRoot = args.repoRoot;
 require(path.join(repoRoot, 'js', 'core', 'import.js')); // attaches TB.imp to globalThis
 var TB = globalThis.TB;
 
@@ -50,9 +54,5 @@ files.forEach(function (f) {
   });
 });
 
-console.log('astf .py files:', rows.length, '| 100%:', full, ' partial:', partial, ' failed:', failed);
-console.log('\n--- most common UNMAPPED tokens (token -> #files) ---');
-Object.keys(unmapped).sort(function (a, b) { return unmapped[b] - unmapped[a]; }).slice(0, 25)
-  .forEach(function (k) { console.log(String(unmapped[k]).padStart(4), k); });
-console.log('\n--- per-file (partial/fail only) ---');
-rows.filter(function (r) { return r[1] !== '100%'; }).forEach(function (r) { console.log(r.join('  |  ')); });
+cli.report(args, { kind: 'astf', headline: 'astf .py files:', full: full, partial: partial,
+                   failed: failed, unmapped: unmapped, rows: rows });
