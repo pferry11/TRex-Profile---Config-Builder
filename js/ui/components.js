@@ -4,6 +4,49 @@
   var TB = root.TB = root.TB || {};
   TB.ui = TB.ui || {};
 
+  /* ---------- tooltip popup ----------
+   * One fixed-position bubble shared by every .tip-icon, driven by delegated
+   * hover events so dynamically-rendered icons work with no wiring. Replaces the
+   * old per-icon ::after: a pseudo-element inside a scrolling pane contributes
+   * to that pane's scroll width even when hidden, which put a horizontal
+   * scrollbar on every builder pane. Fixed + clamped also keeps a tip readable
+   * next to the right edge instead of clipping it. */
+  var tipPop = null;
+  function showTip(icon) {
+    var text = icon.getAttribute('data-tip');
+    if (!text) { return; }
+    if (!tipPop) {
+      tipPop = document.createElement('div');
+      tipPop.id = 'tip-pop';
+      document.body.appendChild(tipPop);
+    }
+    tipPop.textContent = text;
+    tipPop.className = 'show';
+    /* measure after it is laid out, then clamp inside the viewport */
+    tipPop.style.left = '0px';
+    tipPop.style.top = '0px';
+    var r = icon.getBoundingClientRect();
+    var w = tipPop.offsetWidth;
+    var h = tipPop.offsetHeight;
+    var left = Math.max(6, Math.min(r.left, window.innerWidth - w - 8));
+    var top = r.bottom + 6;
+    if (top + h > window.innerHeight - 6) { top = Math.max(6, r.top - h - 6); }
+    tipPop.style.left = left + 'px';
+    tipPop.style.top = top + 'px';
+  }
+  function hideTip() { if (tipPop) { tipPop.className = ''; } }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('mouseover', function (e) {
+      var icon = e.target && e.target.closest ? e.target.closest('.tip-icon') : null;
+      if (icon) { showTip(icon); }
+    });
+    document.addEventListener('mouseout', function (e) {
+      if (e.target && e.target.closest && e.target.closest('.tip-icon')) { hideTip(); }
+    });
+    // a tip anchored to a scrolled-away icon would float; drop it instead
+    document.addEventListener('scroll', hideTip, true);
+  }
+
   // el('div', {class:'x', text:'hi', onclick:fn, title:'...'}, [children])
   TB.ui.el = function (tag, attrs, children) {
     var node = document.createElement(tag);

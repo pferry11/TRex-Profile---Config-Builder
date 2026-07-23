@@ -181,10 +181,10 @@
       }
 
       function presetRow() {
-        var row = el('div', { class: 'field-row' });
+        var row = el('div', { class: 'preset-row' });
         row.appendChild(el('span', { class: 'field-label', text: 'Presets:' }));
         PRESETS.forEach(function (pr) {
-          row.appendChild(el('button', { class: 'btn btn-small btn-secondary', text: pr.label, title: pr.title,
+          row.appendChild(el('button', { class: 'btn btn-preset', text: pr.label, title: pr.title,
             onclick: function () { pr.apply(model); renderBody(); regen(); } }));
         });
         return row;

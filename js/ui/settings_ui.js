@@ -51,6 +51,9 @@
         /* ---- text size ---- */
         wrap.appendChild(TB.ui.section('Text size', textSizeEditor(), true, TB.help.settings.textSize));
 
+        /* ---- accent colour ---- */
+        wrap.appendChild(TB.ui.section('Accent colour', accentEditor(), true, TB.help.settings.accent));
+
         /* ---- defaults ---- */
         var defBody = el('div', { class: 'field-row' });
         defBody.appendChild(field({ label: 'Default TRex version', tip: TB.help.settings.trexVersion, type: 'select',
@@ -116,6 +119,102 @@
         box.appendChild(el('button', { class: 'btn btn-small', text: 'Reset to 100%',
           onclick: function () {
             settings.display = TB.settings.defaults().display;
+            TB.settings.applyDisplay(settings);
+            save(); render();
+          } }));
+        return box;
+      }
+
+      /* Accent colour: a hex field, a native colour picker and a few swatches,
+       * all writing the same settings.display.accent. The preview strip below
+       * is live app chrome (not a mock-up) - it re-tints with everything else
+       * the moment applyDisplay rewrites the CSS variables. */
+      var SWATCHES = [
+        { hex: '#3b9cff', label: 'TRex blue (default)' },
+        { hex: '#3fb950', label: 'green' },
+        { hex: '#a371f7', label: 'purple' },
+        { hex: '#f78166', label: 'coral' },
+        { hex: '#d29922', label: 'amber' },
+        { hex: '#2bb1bb', label: 'teal' },
+        { hex: '#db61a2', label: 'pink' }
+      ];
+
+      function accentEditor() {
+        var box = el('div', {});
+        var current = TB.settings.parseHex(settings.display.accent) ||
+                      TB.settings.parseHex(TB.settings.DEFAULT_ACCENT);
+
+        var hexInput = el('input', { type: 'text', value: current.hex, placeholder: '#3b9cff',
+          title: 'six-digit hex, with or without the leading #' });
+        hexInput.style.width = '110px';
+        hexInput.style.fontFamily = 'var(--mono)';
+        var picker = el('input', { type: 'color', value: current.hex, class: 'accent-picker',
+          title: 'pick a colour' });
+        var err = el('span', { class: 'field-error' });
+
+        /* applied = commit to settings + repaint; preview stays live because the
+           preview strip uses the same CSS variables as the rest of the app. */
+        function apply(hex, opts) {
+          var c = TB.settings.parseHex(hex);
+          if (!c) { err.textContent = 'expect a hex colour like #3b9cff'; return; }
+          err.textContent = '';
+          settings.display.accent = c.hex;
+          TB.settings.applyDisplay(settings);
+          if (!opts || opts.syncHex !== false) { hexInput.value = c.hex; }
+          picker.value = c.hex;
+          if (!opts || opts.save !== false) { save(); }
+        }
+
+        hexInput.addEventListener('input', function () { apply(hexInput.value, { syncHex: false, save: false }); });
+        hexInput.addEventListener('change', function () { apply(hexInput.value); });
+        picker.addEventListener('input', function () { apply(picker.value, { save: false }); });
+        picker.addEventListener('change', function () { apply(picker.value); });
+
+        var row = el('div', { class: 'field-row' }, [
+          el('label', { class: 'field' }, [
+            el('span', { class: 'field-label', text: 'Hex value' }), hexInput, err
+          ]),
+          el('label', { class: 'field' }, [
+            el('span', { class: 'field-label', text: 'Picker' }), picker
+          ])
+        ]);
+        box.appendChild(row);
+
+        var swBox = el('div', { class: 'field-row' }, [
+          el('span', { class: 'field-label range-label', text: 'Swatches' })
+        ]);
+        SWATCHES.forEach(function (s) {
+          var b = el('button', { class: 'accent-swatch', title: s.label + ' — ' + s.hex,
+            onclick: function () { apply(s.hex); } });
+          b.style.background = s.hex;
+          swBox.appendChild(b);
+        });
+        box.appendChild(swBox);
+
+        /* live preview - real accented chrome, not a picture of it */
+        box.appendChild(el('div', { class: 'accent-preview' }, [
+          el('div', { class: 'accent-preview-title', text: 'Preview' }),
+          el('div', { class: 'accent-preview-row' }, [
+            el('span', { class: 'app-badge', text: 'Target TRex v3.06' }),
+            el('button', { class: 'tab-btn active', text: 'active tab' }),
+            el('button', { class: 'btn btn-preset', text: 'Preset button' }),
+            el('button', { class: 'btn btn-generate', text: 'Generate' }),
+            el('span', { class: 'tip-icon', text: 'ⓘ', 'data-tip': 'Tooltips and focus borders pick up the accent too.' })
+          ]),
+          el('div', { class: 'preset-row' }, [
+            el('span', { class: 'field-label', text: 'Preset strip and its tint:' }),
+            el('button', { class: 'btn btn-preset', text: 'DNS' }),
+            el('button', { class: 'btn btn-preset', text: 'SIP' })
+          ]),
+          el('div', { class: 'workarea-head' }, [
+            el('span', { class: 'workarea-title', text: 'Work-area banner' }),
+            el('span', { class: 'workarea-hint', text: 'the accent bar down the left edge' })
+          ])
+        ]));
+
+        box.appendChild(el('button', { class: 'btn btn-small', text: 'Reset to TRex blue',
+          onclick: function () {
+            settings.display.accent = TB.settings.DEFAULT_ACCENT;
             TB.settings.applyDisplay(settings);
             save(); render();
           } }));

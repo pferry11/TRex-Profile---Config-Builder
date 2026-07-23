@@ -229,30 +229,49 @@
             class: 'stream-item' + (idx === selectedIdx ? ' active' : ''),
             onclick: function () { selectedIdx = idx; renderList(); renderEditor(); }
           });
+          /* Controls sit in a fixed header row; the pcap name wraps underneath,
+             so a long space-free filename can never push them out of the card. */
+          var head = el('div', { class: 'stream-head' });
+          head.appendChild(el('span', { class: 'stream-index', text: '#' + (idx + 1) }));
+          var btns = el('div', { class: 'stream-btns' });
+          function sbtn(label, title, fn) {
+            btns.appendChild(el('button', { class: 'btn btn-small', text: label, title: title,
+              onclick: function (e) { e.stopPropagation(); fn(); } }));
+          }
+          sbtn('↑', 'move up', function () {
+            if (idx > 0) {
+              model.capInfo.splice(idx - 1, 0, model.capInfo.splice(idx, 1)[0]);
+              if (selectedIdx === idx) { selectedIdx = idx - 1; }
+              renderList(); renderEditor(); regen();
+            }
+          });
+          sbtn('↓', 'move down', function () {
+            if (idx < model.capInfo.length - 1) {
+              model.capInfo.splice(idx + 1, 0, model.capInfo.splice(idx, 1)[0]);
+              if (selectedIdx === idx) { selectedIdx = idx + 1; }
+              renderList(); renderEditor(); regen();
+            }
+          });
+          sbtn('⧉', 'duplicate', function () {
+            model.capInfo.splice(idx + 1, 0, TB.util.deepClone(c));
+            selectedIdx = idx + 1;
+            renderList(); renderEditor(); regen();
+          });
+          sbtn('✕', 'delete', function () {
+            if (!confirm('Delete this pcap template?')) { return; }
+            model.capInfo.splice(idx, 1);
+            if (selectedIdx >= model.capInfo.length) { selectedIdx = Math.max(0, model.capInfo.length - 1); }
+            renderList(); renderEditor(); regen();
+          });
+          head.appendChild(btns);
+          row.appendChild(head);
           row.appendChild(el('div', { class: 'stream-name' }, [
             el('div', { text: (c.name || '?').split('/').pop() }),
             el('small', { text: 'cps ' + c.cps + (c.dynPyload && c.dynPyload.length ? ' · dyn_pyload' : '') })
           ]));
-          var btns = el('div', { class: 'stream-btns' });
-          btns.appendChild(el('button', { class: 'btn btn-small', text: '⧉', title: 'duplicate',
-            onclick: function (e) {
-              e.stopPropagation();
-              model.capInfo.splice(idx + 1, 0, TB.util.deepClone(c));
-              selectedIdx = idx + 1;
-              renderList(); renderEditor(); regen();
-            } }));
-          btns.appendChild(el('button', { class: 'btn btn-small', text: '✕', title: 'delete',
-            onclick: function (e) {
-              e.stopPropagation();
-              if (!confirm('Delete this pcap template?')) { return; }
-              model.capInfo.splice(idx, 1);
-              if (selectedIdx >= model.capInfo.length) { selectedIdx = Math.max(0, model.capInfo.length - 1); }
-              renderList(); renderEditor(); regen();
-            } }));
-          row.appendChild(btns);
           listPane.appendChild(row);
         });
-        listPane.appendChild(el('button', { class: 'btn', text: '+ Add pcap template',
+        listPane.appendChild(el('button', { class: 'btn list-action', text: '+ Add pcap template',
           onclick: function () {
             model.capInfo.push(defaultCap());
             selectedIdx = model.capInfo.length - 1;

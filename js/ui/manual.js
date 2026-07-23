@@ -87,6 +87,7 @@
       serverOnly: '--astf-server-only', clientMask: '--astf-client-mask', extraArgs: 'Extra args'
     },
     settings: {
+      textSize: 'Text size', accent: 'Accent colour',
       trexVersion: 'Default TRex version', pcapDir: 'Pcap directory', activeServer: 'Active server',
       name: 'Server name', mgmtHost: 'Mgmt host', trexDir: 'TRex dir', cores: 'Cores', portLimit: 'Port limit',
       bandwidth: 'Bandwidth', interfaces: 'PCI interfaces', portMode: 'Port mode', platform: 'Platform block',
@@ -180,7 +181,8 @@
 
     { id: 'stl', title: 'STL Profile builder', html: function () {
       return tabIntro('stl') +
-        '<h4>Layout</h4><p>Three panes: the <strong>stream list</strong> (add, duplicate, reorder, enable/disable - the ' +
+        '<h4>Layout</h4><p>Three panes: the <strong>stream list</strong> (add, duplicate, reorder, enable/disable - each ' +
+        'card carries its controls in a header row above the name, so they stay put however long the name runs - the ' +
         '<strong>IMIX preset</strong> button loads the classic 60/590/1514 B three-stream table in one click), ' +
         'the <strong>stream editor</strong> for the selected stream, and the <strong>live output</strong> which regenerates as you type.</p>' +
         '<h4>Building a stream</h4><ol>' +
@@ -386,6 +388,11 @@
         '<p>The <strong>Text size</strong> section scales the app text on every screen: <em>All text</em> is a global ' +
         'multiplier, and the remaining sliders fine-tune element groups (field names &amp; hints, controls, generated ' +
         'output, manual/tooltips) on top of it. Changes apply live and persist with the workspace.</p>' +
+        '<p>The <strong>Accent colour</strong> section recolours every highlight in the app - active tab underline, ' +
+        'focus and selection borders, preset strips, tooltips, links and the work-area banner - from a single hex ' +
+        'value. Type it, use the picker or click a swatch; the preview strip underneath is real app chrome, so it ' +
+        're-tints as you choose. One hex drives the solid accent and the two tint levels derived from it, so nothing ' +
+        'is left on the old colour. Unparseable values fall back to TRex blue rather than clearing the accent.</p>' +
         '<p>Workspaces persist in the browser\'s <strong>IndexedDB</strong> (no practical size ceiling; the bottom of ' +
         'the tab shows the active storage backend). Older localStorage workspaces migrate over automatically on first ' +
         'load, and localStorage remains the fallback where IndexedDB is unavailable.</p>' +
@@ -469,6 +476,8 @@
         ['cap2 builder', 'Per-template generator pools', 'Named client/server pools (generator_clients/generator_servers, per-template client_pool/server_pool and their track_ports flag) used by per_template_gen*/many_client_example - a richer generator model than the single client/server range. Adding them took shipped cap2 import coverage from 61/67 to the full 67/67 files at 100%, so every shipped v3.06 cap2/avl profile now round-trips losslessly.', 'Large', 'done'],
         ['App platform', 'Bundle export', 'Download profile + cfg + runbook + launch script as one zip per test.', 'Small', 'done'],
         ['App platform', 'Undo/redo in builders', 'Model snapshots per edit; cheap because models are already plain JSON.', 'Medium', 'done'],
+        ['App platform', 'UI layout & list-control polish', 'Builder panes are sized as a proportion of the window rather than in fixed pixels, so there is no page-wide horizontal scrollbar - content reflows instead. The list column tracks 13% of the width, clamped to 130-240px so it stays usable on a laptop and does not sprawl on a 2560-wide monitor; the editor and output split whatever is left. scrollbars are restyled to blend with the dark theme; every list card in the STL/ASTF/cap2 panes carries a fixed control header (move up/down, duplicate, delete) with the name wrapping below it, so long space-free imported names can no longer squeeze the controls out; preset buttons sit in a padded accent strip. Tooltips also moved from a per-icon ::after to one shared fixed-position bubble - a hidden pseudo-element inside a scrolling pane still counted toward its scroll width, which was the actual source of the pane scrollbars.', 'Small', 'done'],
+        ['App platform', 'Configurable accent colour', 'Settings -> Accent colour: one hex value (typed, picked or chosen from swatches) drives --accent plus the two tint levels derived from it, so every highlight in the app recolours at once. Live preview strip, applied via CSS variables like the text scales, saved with the workspace.', 'Small', 'done'],
         ['Performance', 'IndexedDB workspace store', 'localStorage caps at ~5 MB; IndexedDB removes the ceiling for pcap-heavy workspaces. App-side performance is otherwise not a bottleneck (generation is instant, debounced at 120 ms).', 'Small', 'done']
       ];
       var STATUS_LABEL = { planned: 'Planned', 'in-progress': 'In progress', done: 'Done' };

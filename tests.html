@@ -2410,6 +2410,39 @@ test('settings: text-size display defaults and CSS variable apply', function () 
   return { pass: !fails.length, detail: fails.join(', ') };
 });
 
+test('settings: accent colour parsing, derived tints and fallback', function () {
+  var fails = [];
+  var d = TB.settings.defaults();
+  if (d.display.accent !== '#3b9cff') { fails.push('default accent(' + d.display.accent + ')'); }
+
+  /* accepted spellings all normalise to lower-case #rrggbb */
+  [['#3B9CFF', '#3b9cff'], ['3b9cff', '#3b9cff'], ['#39f', '#3399ff'], ['  #a371f7 ', '#a371f7']]
+    .forEach(function (p) {
+      var c = TB.settings.parseHex(p[0]);
+      if (!c || c.hex !== p[1]) { fails.push('parse ' + p[0] + '->' + (c && c.hex)); }
+    });
+  /* rejected outright - applyDisplay is what decides the fallback */
+  ['', 'blue', '#12345', '#gggggg', 'rgb(1,2,3)', null, 42].forEach(function (bad) {
+    if (TB.settings.parseHex(bad) !== null) { fails.push('accepted ' + bad); }
+  });
+
+  var st = document.documentElement.style;
+  TB.settings.applyDisplay({ display: { accent: '#a371f7' } });
+  if (st.getPropertyValue('--accent') !== '#a371f7') { fails.push('accent(' + st.getPropertyValue('--accent') + ')'); }
+  if (st.getPropertyValue('--accent-soft') !== 'rgba(163, 113, 247, 0.05)') {
+    fails.push('soft(' + st.getPropertyValue('--accent-soft') + ')');
+  }
+  if (st.getPropertyValue('--accent-soft-strong') !== 'rgba(163, 113, 247, 0.16)') {
+    fails.push('soft-strong(' + st.getPropertyValue('--accent-soft-strong') + ')');
+  }
+  /* a corrupted value must land on TRex blue, never on an empty variable */
+  TB.settings.applyDisplay({ display: { accent: 'not-a-colour' } });
+  if (st.getPropertyValue('--accent') !== '#3b9cff') { fails.push('fallback(' + st.getPropertyValue('--accent') + ')'); }
+
+  TB.settings.applyDisplay(d);
+  return { pass: !fails.length, detail: fails.join(', ') };
+});
+
 test('persist: IndexedDB backing store, write-through cache round-trip', function () {
   return TB.persist.ready.then(function () {
     if (TB.persist.backendName() !== 'indexeddb') {
@@ -2556,6 +2589,8 @@ var TEST_DOCS = {
     'Guard rails for the helper: legacy STF mode has no console so the block must be skipped with a warning; a non-numeric port list falls back to all acquired ports (no -p emitted); record with neither --rx nor --tx warns and defaults to --rx 0 so the emitted commands always parse.',
   'settings: text-size display defaults and CSS variable apply':
     'The adjustable text size (Settings -> Text size): defaults must ship all five scales at 100%, applyDisplay must translate percentages into the CSS variables the stylesheet multiplies into every font-size, and out-of-range values (here 999%) must clamp back to 1 so a corrupted workspace import cannot render the app unreadable.',
+  'settings: accent colour parsing, derived tints and fallback':
+    'The configurable accent (Settings -> Accent colour): parseHex must accept #rrggbb, bare rrggbb and the #rgb shorthand and reject anything else, and applyDisplay must write the normalised hex to --accent plus the two rgba tint levels the stylesheet uses for preset strips and hover fills. An unparseable value (a colour name, a truncated hex) must fall back to TRex blue rather than clearing the variable, so a hand-edited or corrupted workspace import cannot leave the app with no accent at all.',
   'golden: minimal cont UDP with size tunable (udp_1pkt_simple-like)':
     'The baseline STL profile: one continuous UDP stream whose frame size is bound to a --size tunable. Verifies the whole file end to end - header comments, summary block, argparse plumbing, STLPktBuilder padding and STLTXCont - against the shipped udp_1pkt_simple.py pattern.',
   'golden: 3-stream IMIX with VM vars (imix-like)':

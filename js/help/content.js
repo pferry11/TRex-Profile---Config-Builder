@@ -249,6 +249,7 @@
       _tab: 'App defaults plus the server registry: one entry per TRex box (PCI NICs, cores, port identities). The Platform Config and CLI tabs read from here.',
       _sections: {},
       textSize: 'Scales the app text on every screen. "All text" multiplies everything at once; the other sliders fine-tune element groups on top of it (field names are the smallest text - bump that one first). Changes apply live and are saved with the workspace.',
+      accent: 'The highlight colour used throughout the app - active tab underline, focus and selection borders, preset strips, tooltips, links and the work-area banner. Type a hex value, use the picker or click a swatch; the preview below is real app chrome and re-tints as you go. Applies live and is saved with the workspace.',
       trexVersion: 'Default target version for new profiles and configs.',
       pcapDir: 'Where pcaps live on the box - used as a hint next to pcap path fields.',
       activeServer: 'Server preselected in the Platform Config tab.',

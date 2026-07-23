@@ -379,14 +379,14 @@
             class: 'stream-item' + (s.id === selectedId ? ' active' : '') + (s.enabled ? '' : ' disabled'),
             onclick: function () { selectedId = s.id; renderList(); renderEditor(); }
           });
+          /* Controls sit in a fixed header row; the name wraps underneath, so a
+             long space-free name can never push the buttons out of the card. */
+          var head = el('div', { class: 'stream-head' });
           var check = el('input', { type: 'checkbox', checked: s.enabled, title: 'enabled' });
           check.addEventListener('click', function (e) { e.stopPropagation(); });
           check.addEventListener('change', function () { s.enabled = check.checked; renderList(); regen(); });
-          row.appendChild(check);
-          row.appendChild(el('div', { class: 'stream-name' }, [
-            el('div', { text: s.name }),
-            el('small', { text: s.mode.type + ' @ ' + s.mode.pps + ' ' + rateUnitShort(s.mode.rateUnit) })
-          ]));
+          head.appendChild(check);
+          head.appendChild(el('span', { class: 'stream-index', text: '#' + (idx + 1) }));
           var btns = el('div', { class: 'stream-btns' });
           function sbtn(label, title, fn) {
             btns.appendChild(el('button', { class: 'btn btn-small', text: label, title: title,
@@ -418,10 +418,15 @@
             if (selectedId === s.id) { selectedId = model.streams.length ? model.streams[0].id : null; }
             renderList(); renderEditor(); regen();
           });
-          row.appendChild(btns);
+          head.appendChild(btns);
+          row.appendChild(head);
+          row.appendChild(el('div', { class: 'stream-name' }, [
+            el('div', { text: s.name }),
+            el('small', { text: s.mode.type + ' @ ' + s.mode.pps + ' ' + rateUnitShort(s.mode.rateUnit) })
+          ]));
           listPane.appendChild(row);
         });
-        listPane.appendChild(el('button', { class: 'btn', text: '+ Add stream',
+        listPane.appendChild(el('button', { class: 'btn list-action', text: '+ Add stream',
           onclick: function () {
             var s = defaultStream(model.streams.length);
             model.streams.push(s);
@@ -429,7 +434,7 @@
             renderList(); renderEditor(); regen();
           } }));
         listPane.appendChild(el('button', {
-          class: 'btn btn-secondary', text: 'IMIX preset',
+          class: 'btn btn-preset list-action', text: 'IMIX preset',
           title: 'Replace streams with the classic 60/590/1514 B IMIX table (28/16/4 pps, IP sweeps)',
           onclick: function () {
             if (model.streams.length &&
@@ -504,10 +509,10 @@
         var p = s.packet;
         var box = el('div', {});
 
-        var presetRow = el('div', { class: 'field-row' });
+        var presetRow = el('div', { class: 'preset-row' });
         presetRow.appendChild(el('span', { class: 'field-label', text: 'Presets:' }));
         PACKET_PRESETS.forEach(function (pre) {
-          presetRow.appendChild(el('button', { class: 'btn btn-small', text: pre.label,
+          presetRow.appendChild(el('button', { class: 'btn btn-preset', text: pre.label,
             title: TB.help.stl.packetPresets,
             onclick: function () { pre.apply(s); renderEditor(); regen(); } }));
         });

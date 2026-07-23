@@ -277,10 +277,10 @@
 
       function renderPresets() {
         presetBox.innerHTML = '';
-        var body = el('div', { class: 'field-row' });
+        var body = el('div', { class: 'preset-row' });
         body.appendChild(el('span', { class: 'field-label', text: 'One click loads a ready-to-run profile (replaces the current entries):' }));
         PRESETS.forEach(function (pre) {
-          body.appendChild(el('button', { class: 'btn btn-small', text: pre.label, title: pre.title,
+          body.appendChild(el('button', { class: 'btn btn-preset', text: pre.label, title: pre.title,
             onclick: function () {
               if (!confirm('Load the ' + pre.label + ' preset? It replaces the current ' +
                            (model.mode === 'pcap' ? 'pcap entries' : 'templates') + '.')) { return; }
@@ -521,15 +521,29 @@
             class: 'stream-item' + (idx === selectedIdx ? ' active' : ''),
             onclick: function () { selectedIdx = idx; renderList(); renderEditor(); }
           });
-          row.appendChild(el('div', { class: 'stream-name' }, [
-            el('div', { text: title }),
-            el('small', { text: sub })
-          ]));
+          /* Controls sit in a fixed header row; the name wraps underneath, so a
+             long space-free pcap filename can never push them out of the card. */
+          var head = el('div', { class: 'stream-head' });
+          head.appendChild(el('span', { class: 'stream-index', text: '#' + (idx + 1) }));
           var btns = el('div', { class: 'stream-btns' });
           function sbtn(label, title2, fn) {
             btns.appendChild(el('button', { class: 'btn btn-small', text: label, title: title2,
               onclick: function (e) { e.stopPropagation(); fn(); } }));
           }
+          sbtn('↑', 'move up', function () {
+            if (idx > 0) {
+              items().splice(idx - 1, 0, items().splice(idx, 1)[0]);
+              if (selectedIdx === idx) { selectedIdx = idx - 1; }
+              renderList(); renderEditor(); regen();
+            }
+          });
+          sbtn('↓', 'move down', function () {
+            if (idx < items().length - 1) {
+              items().splice(idx + 1, 0, items().splice(idx, 1)[0]);
+              if (selectedIdx === idx) { selectedIdx = idx + 1; }
+              renderList(); renderEditor(); regen();
+            }
+          });
           sbtn('⧉', 'duplicate', function () {
             var copy = TB.util.deepClone(it);
             if (!isPcap) { copy.id = TB.util.uid('t'); }
@@ -543,10 +557,15 @@
             if (selectedIdx >= items().length) { selectedIdx = Math.max(0, items().length - 1); }
             renderList(); renderEditor(); regen();
           });
-          row.appendChild(btns);
+          head.appendChild(btns);
+          row.appendChild(head);
+          row.appendChild(el('div', { class: 'stream-name' }, [
+            el('div', { text: title }),
+            el('small', { text: sub })
+          ]));
           listPane.appendChild(row);
         });
-        listPane.appendChild(el('button', { class: 'btn', text: isPcap ? '+ Add pcap entry' : '+ Add template',
+        listPane.appendChild(el('button', { class: 'btn list-action', text: isPcap ? '+ Add pcap entry' : '+ Add template',
           onclick: function () {
             items().push(isPcap ? defaultCap() : defaultTemplate(items().length + 1));
             selectedIdx = items().length - 1;
@@ -738,7 +757,7 @@
               onChange: function (v) { cmd.label = v || 'a:'; regen(); } }));
             break;
         }
-        var btns = el('div', { class: 'stream-btns', style: 'visibility: visible; margin-left: auto;' });
+        var btns = el('div', { class: 'stream-btns', style: 'margin-left: auto;' });
         function cbtn(label, fn) {
           btns.appendChild(el('button', { class: 'btn btn-small', text: label,
             onclick: function () { fn(); } }));
