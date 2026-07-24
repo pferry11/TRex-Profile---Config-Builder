@@ -1,0 +1,34 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "builder",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8844"
+      ],
+      "port": 8844
+    },
+    {
+      "name": "tests",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8843"
+      ],
+      "port": 8843
+    },
+    {
+      "name": "worktracker-dev",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\Dev\\Git\\WorkTracker && npm run dev -- --port 5199 --strictPort"
+      ],
+      "port": 5199
+    }
+  ]
+}
